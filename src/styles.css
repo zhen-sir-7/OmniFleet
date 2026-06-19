@@ -291,6 +291,24 @@ select {
   color: var(--muted);
 }
 
+.proxy-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.proxy-toggle input {
+  width: 18px;
+  min-height: 18px;
+  accent-color: var(--accent);
+}
+
 .route-card {
   margin-top: 18px;
   padding: 16px;

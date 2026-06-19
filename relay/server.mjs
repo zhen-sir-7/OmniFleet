@@ -64,6 +64,61 @@ function publicRunner(runner) {
   }
 }
 
+function runnerHeaders(req) {
+  const token = req.headers['x-omnifleet-token']
+  return {
+    'Content-Type': 'application/json',
+    ...(typeof token === 'string' ? { 'X-OmniFleet-Token': token } : {}),
+  }
+}
+
+function findRunner(id) {
+  const runner = runners.get(id)
+  if (!runner) return null
+  return runner
+}
+
+async function proxyJson(req, res, runner, path, options = {}) {
+  const response = await fetch(`${runner.endpoint}${path}`, {
+    method: options.method ?? req.method,
+    headers: runnerHeaders(req),
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  })
+  const text = await response.text()
+  res.writeHead(response.status, {
+    'Content-Type': response.headers.get('content-type') ?? 'application/json; charset=utf-8',
+    'Access-Control-Allow-Origin': '*',
+  })
+  res.end(text)
+}
+
+async function proxyEvents(req, res, runner, taskId) {
+  const token = req.headers['x-omnifleet-token'] ?? new URL(req.url, `http://${req.headers.host}`).searchParams.get('token')
+  const eventUrl = `${runner.endpoint}/api/tasks/${taskId}/events${token ? `?token=${encodeURIComponent(token)}` : ''}`
+  const response = await fetch(eventUrl)
+
+  if (!response.ok || !response.body) {
+    return json(res, response.status, { error: 'Unable to connect to runner event stream' })
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+  })
+
+  const reader = response.body.getReader()
+  req.on('close', () => reader.cancel().catch(() => undefined))
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    res.write(value)
+  }
+  res.end()
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
 
@@ -102,6 +157,48 @@ const server = createServer(async (req, res) => {
       runners.set(runner.id, runner)
       saveRegistry()
       return json(res, 200, publicRunner(runner))
+    }
+
+    if (url.pathname === '/api/tasks' && req.method === 'POST') {
+      const body = await readBody(req)
+      const runner = findRunner(body.runnerId)
+      if (!runner) return json(res, 404, { error: 'Runner not found' })
+      return proxyJson(req, res, runner, '/api/tasks', { method: 'POST', body })
+    }
+
+    const taskListMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)$/)
+    if (taskListMatch && req.method === 'GET') {
+      const runner = findRunner(taskListMatch[1])
+      if (!runner) return json(res, 404, { error: 'Runner not found' })
+      return proxyJson(req, res, runner, '/api/tasks')
+    }
+
+    const taskMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/([^/]+)$/)
+    if (taskMatch && req.method === 'GET') {
+      const runner = findRunner(taskMatch[1])
+      if (!runner) return json(res, 404, { error: 'Runner not found' })
+      return proxyJson(req, res, runner, `/api/tasks/${taskMatch[2]}`)
+    }
+
+    const approveMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/([^/]+)\/approve$/)
+    if (approveMatch && req.method === 'POST') {
+      const runner = findRunner(approveMatch[1])
+      if (!runner) return json(res, 404, { error: 'Runner not found' })
+      return proxyJson(req, res, runner, `/api/tasks/${approveMatch[2]}/approve`, { method: 'POST' })
+    }
+
+    const applyMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/([^/]+)\/apply$/)
+    if (applyMatch && req.method === 'POST') {
+      const runner = findRunner(applyMatch[1])
+      if (!runner) return json(res, 404, { error: 'Runner not found' })
+      return proxyJson(req, res, runner, `/api/tasks/${applyMatch[2]}/apply`, { method: 'POST' })
+    }
+
+    const eventMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/([^/]+)\/events$/)
+    if (eventMatch && req.method === 'GET') {
+      const runner = findRunner(eventMatch[1])
+      if (!runner) return json(res, 404, { error: 'Runner not found' })
+      return proxyEvents(req, res, runner, eventMatch[2])
     }
 
     return json(res, 404, { error: 'Not found' })

@@ -105,6 +105,7 @@ export function App() {
   const [authError, setAuthError] = useState<string | null>(null)
   const [relayUrl, setRelayUrl] = useState(() => localStorage.getItem('omnifleet-relay-url') ?? defaultRelayUrl)
   const [relayStatus, setRelayStatus] = useState<string | null>(null)
+  const [useRelayProxy, setUseRelayProxy] = useState(false)
 
   useEffect(() => {
     async function loadRunner() {
@@ -137,11 +138,18 @@ export function App() {
   const currentRunner = runners.find((runner) => runner.id === selectedRunner) ?? runners[0]
   const currentProject = projects.find((project) => project.id === selectedProject) ?? projects[0]
   const runnerBase = currentRunner.endpoint ?? apiBase
+  const relayBase = relayUrl.replace(/\/$/, '')
   const logEvents = events.filter((event) => event.type === 'log')
   const diffLines = result?.diff ?? []
 
+  function taskPath(path: 'events' | 'approve' | 'apply', id: string) {
+    if (useRelayProxy) return `/api/tasks/${selectedRunner}/${id}/${path}`
+    return `/api/tasks/${id}/${path}`
+  }
+
   function apiFetch(path: string, options: RequestInit = {}) {
-    return fetch(`${runnerBase}${path}`, {
+    const base = useRelayProxy ? relayBase : runnerBase
+    return fetch(`${base}${path}`, {
       ...options,
       headers: {
         ...(options.headers ?? {}),
@@ -185,7 +193,7 @@ export function App() {
   async function loadRelayRunners() {
     try {
       localStorage.setItem('omnifleet-relay-url', relayUrl)
-      const response = await fetch(`${relayUrl.replace(/\/$/, '')}/api/runners`)
+      const response = await fetch(`${relayBase}/api/runners`)
       if (!response.ok) throw new Error('relay unavailable')
       const relayRunners = (await response.json()) as Runner[]
       if (relayRunners.length === 0) {
@@ -197,6 +205,7 @@ export function App() {
       setSelectedRunner(relayRunners[0].id)
       setSelectedTool(relayRunners[0].tools[0] ?? 'mock-agent')
       loadProjectsForRunner(relayRunners[0])
+      setUseRelayProxy(true)
       setRelayStatus(`loaded ${relayRunners.length} runner(s) from relay`)
     } catch (error) {
       setRelayStatus(error instanceof Error ? error.message : 'relay unavailable')
@@ -205,7 +214,7 @@ export function App() {
 
   async function loadHistory() {
     try {
-      const response = await apiFetch('/api/tasks')
+      const response = await apiFetch(useRelayProxy ? `/api/tasks/${selectedRunner}` : '/api/tasks')
       if (!response.ok) return
       setHistory((await response.json()) as TaskRecord[])
     } catch {
@@ -245,7 +254,8 @@ export function App() {
     const created = (await response.json()) as { id: string }
     setTaskId(created.id)
     loadHistory()
-    const source = new EventSource(`${runnerBase}/api/tasks/${created.id}/events?token=${encodeURIComponent(token)}`)
+    const eventBase = useRelayProxy ? relayBase : runnerBase
+    const source = new EventSource(`${eventBase}${taskPath('events', created.id)}?token=${encodeURIComponent(token)}`)
 
     source.onmessage = (message) => {
       const event = JSON.parse(message.data) as TaskEvent
@@ -287,7 +297,7 @@ export function App() {
 
   async function approveTask() {
     if (taskId && runnerOnline) {
-      const response = await apiFetch(`/api/tasks/${taskId}/approve`, { method: 'POST' })
+      const response = await apiFetch(taskPath('approve', taskId), { method: 'POST' })
       if (response.ok) {
         const approved = (await response.json()) as { status: TaskState; result: TaskResult | null }
         setState(approved.status)
@@ -304,7 +314,7 @@ export function App() {
     if (!taskId || !runnerOnline) return
 
     setApplyError(null)
-    const response = await apiFetch(`/api/tasks/${taskId}/apply`, { method: 'POST' })
+    const response = await apiFetch(taskPath('apply', taskId), { method: 'POST' })
     if (!response.ok) {
       const payload = (await response.json()) as { error?: string }
       setApplyError(payload.error ?? 'failed to apply approved result')
@@ -388,6 +398,15 @@ export function App() {
             <button className="secondary compact" onClick={loadRelayRunners}>Load</button>
           </div>
           {relayStatus && <p className="token-hint neutral-hint">{relayStatus}</p>}
+
+          <label className="proxy-toggle">
+            <input
+              type="checkbox"
+              checked={useRelayProxy}
+              onChange={(event) => setUseRelayProxy(event.target.checked)}
+            />
+            <span>Route task API through relay proxy</span>
+          </label>
 
           <label className="field-label" htmlFor="task-input">
             Development request

@@ -697,6 +697,12 @@ The relay exposes:
 GET  /api/health
 GET  /api/runners
 POST /api/runners/register
+POST /api/tasks
+GET  /api/tasks/:runnerId
+GET  /api/tasks/:runnerId/:taskId
+GET  /api/tasks/:runnerId/:taskId/events
+POST /api/tasks/:runnerId/:taskId/approve
+POST /api/tasks/:runnerId/:taskId/apply
 ```
 
 Registered runners are stored locally at:
@@ -715,8 +721,15 @@ The web UI can load runners from the relay:
 4. Keep the relay URL as `http://localhost:8790` or enter another relay endpoint.
 5. Click `Load` beside the relay URL.
 6. Select a discovered runner from the `Runner` dropdown.
+7. Keep `Route task API through relay proxy` enabled to send task API calls through the relay.
 
-Tasks are still executed by direct calls to the selected runner endpoint. The relay does not forward tasks yet. It only establishes runner discovery and registration, which is the first infrastructure step toward multi-device routing.
+The relay can now proxy task creation, task history, event streams, approve, and apply calls to the selected runner. The relay does not store runner tokens; the web UI forwards the runner token to the relay, and the relay passes it to the runner for authorization. Task execution still happens on the runner device.
+
+This is the first usable routing model:
+
+```text
+Web UI -> Relay -> Selected Runner -> Local Workspace
+```
 
 Task history is stored locally at:
 
