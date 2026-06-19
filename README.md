@@ -697,6 +697,7 @@ The relay exposes:
 GET  /api/health
 GET  /api/runners
 POST /api/runners/register
+GET  /api/tasks
 POST /api/tasks
 GET  /api/tasks/:runnerId
 GET  /api/tasks/:runnerId/:taskId
@@ -709,6 +710,12 @@ Registered runners are stored locally at:
 
 ```text
 .omnifleet/relay-runners.json
+```
+
+Proxied task records are stored locally at:
+
+```text
+.omnifleet/relay-tasks.json
 ```
 
 When a runner starts with `OMNIFLEET_RELAY_URL`, it self-registers with the relay and refreshes its registration every 30 seconds. The relay marks runners as `online` if they were seen in the last 45 seconds, otherwise `stale`.
@@ -724,6 +731,8 @@ The web UI can load runners from the relay:
 7. Keep `Route task API through relay proxy` enabled to send task API calls through the relay.
 
 The relay can now proxy task creation, task history, event streams, approve, and apply calls to the selected runner. The relay does not store runner tokens; the web UI forwards the runner token to the relay, and the relay passes it to the runner for authorization. Task execution still happens on the runner device.
+
+When the relay proxies task creation, approve, or apply calls, it stores a task metadata record with the owning runner. `GET /api/tasks` returns the latest relay-level task records across all runners. This gives the UI a unified history surface even when tasks belong to different devices.
 
 This is the first usable routing model:
 

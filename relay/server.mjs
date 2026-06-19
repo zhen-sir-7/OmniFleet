@@ -6,8 +6,10 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const stateDir = resolve(root, '.omnifleet')
 const registryPath = resolve(stateDir, 'relay-runners.json')
+const taskStorePath = resolve(stateDir, 'relay-tasks.json')
 const port = Number(process.env.OMNIFLEET_RELAY_PORT ?? 8790)
 const runners = loadRegistry()
+const tasks = loadTasks()
 
 function loadRegistry() {
   try {
@@ -22,6 +24,21 @@ function loadRegistry() {
 function saveRegistry() {
   mkdirSync(stateDir, { recursive: true })
   writeFileSync(registryPath, JSON.stringify(Array.from(runners.values()), null, 2), 'utf8')
+}
+
+function loadTasks() {
+  try {
+    if (!existsSync(taskStorePath)) return new Map()
+    const items = JSON.parse(readFileSync(taskStorePath, 'utf8'))
+    return new Map(items.map((task) => [`${task.runnerId}:${task.id}`, task]))
+  } catch {
+    return new Map()
+  }
+}
+
+function saveTasks() {
+  mkdirSync(stateDir, { recursive: true })
+  writeFileSync(taskStorePath, JSON.stringify(Array.from(tasks.values()).slice(-200), null, 2), 'utf8')
 }
 
 function json(res, status, data) {
@@ -64,6 +81,37 @@ function publicRunner(runner) {
   }
 }
 
+function publicTask(task) {
+  return {
+    id: task.id,
+    runnerId: task.runnerId,
+    runnerName: task.runnerName,
+    description: task.description,
+    tool: task.tool,
+    status: task.status,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    result: task.result ?? null,
+  }
+}
+
+function rememberTask(runner, task) {
+  const record = {
+    id: task.id,
+    runnerId: runner.id,
+    runnerName: runner.name,
+    description: task.description,
+    tool: task.tool,
+    status: task.status,
+    createdAt: task.createdAt,
+    updatedAt: new Date().toISOString(),
+    result: task.result ?? null,
+  }
+  tasks.set(`${runner.id}:${task.id}`, record)
+  saveTasks()
+  return record
+}
+
 function runnerHeaders(req) {
   const token = req.headers['x-omnifleet-token']
   return {
@@ -90,6 +138,11 @@ async function proxyJson(req, res, runner, path, options = {}) {
     'Access-Control-Allow-Origin': '*',
   })
   res.end(text)
+  try {
+    return { ok: response.ok, status: response.status, data: text ? JSON.parse(text) : null }
+  } catch {
+    return { ok: response.ok, status: response.status, data: null }
+  }
 }
 
 async function proxyEvents(req, res, runner, taskId) {
@@ -159,11 +212,21 @@ const server = createServer(async (req, res) => {
       return json(res, 200, publicRunner(runner))
     }
 
+    if (url.pathname === '/api/tasks' && req.method === 'GET') {
+      const items = Array.from(tasks.values())
+        .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+        .slice(0, 100)
+        .map(publicTask)
+      return json(res, 200, items)
+    }
+
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
       const body = await readBody(req)
       const runner = findRunner(body.runnerId)
       if (!runner) return json(res, 404, { error: 'Runner not found' })
-      return proxyJson(req, res, runner, '/api/tasks', { method: 'POST', body })
+      const proxied = await proxyJson(req, res, runner, '/api/tasks', { method: 'POST', body })
+      if (proxied.ok && proxied.data?.id) rememberTask(runner, proxied.data)
+      return
     }
 
     const taskListMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)$/)
@@ -184,14 +247,18 @@ const server = createServer(async (req, res) => {
     if (approveMatch && req.method === 'POST') {
       const runner = findRunner(approveMatch[1])
       if (!runner) return json(res, 404, { error: 'Runner not found' })
-      return proxyJson(req, res, runner, `/api/tasks/${approveMatch[2]}/approve`, { method: 'POST' })
+      const proxied = await proxyJson(req, res, runner, `/api/tasks/${approveMatch[2]}/approve`, { method: 'POST' })
+      if (proxied.ok && proxied.data?.id) rememberTask(runner, proxied.data)
+      return
     }
 
     const applyMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/([^/]+)\/apply$/)
     if (applyMatch && req.method === 'POST') {
       const runner = findRunner(applyMatch[1])
       if (!runner) return json(res, 404, { error: 'Runner not found' })
-      return proxyJson(req, res, runner, `/api/tasks/${applyMatch[2]}/apply`, { method: 'POST' })
+      const proxied = await proxyJson(req, res, runner, `/api/tasks/${applyMatch[2]}/apply`, { method: 'POST' })
+      if (proxied.ok && proxied.data?.id) rememberTask(runner, proxied.data)
+      return
     }
 
     const eventMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/([^/]+)\/events$/)

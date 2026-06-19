@@ -46,6 +46,8 @@ type TaskEvent = {
 
 type TaskRecord = {
   id: string
+  runnerId?: string
+  runnerName?: string
   description: string
   tool: string
   status: TaskState
@@ -214,7 +216,7 @@ export function App() {
 
   async function loadHistory() {
     try {
-      const response = await apiFetch(useRelayProxy ? `/api/tasks/${selectedRunner}` : '/api/tasks')
+      const response = await apiFetch('/api/tasks')
       if (!response.ok) return
       setHistory((await response.json()) as TaskRecord[])
     } catch {
@@ -610,7 +612,7 @@ export function App() {
               >
                 <span>{item.status}</span>
                 <strong>{item.description || item.id}</strong>
-                <small>{item.tool} / {new Date(item.createdAt).toLocaleString()}</small>
+                <small>{item.runnerName ? `${item.runnerName} / ` : ''}{item.tool} / {new Date(item.createdAt).toLocaleString()}</small>
               </button>
             ))}
           </div>
