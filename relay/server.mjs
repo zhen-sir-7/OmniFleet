@@ -143,6 +143,25 @@ function rememberTask(runner, task) {
   return record
 }
 
+function updateTaskFromStateEvent(runner, taskId, event) {
+  if (!event?.status) return
+  const key = `${runner.id}:${taskId}`
+  const existing = tasks.get(key)
+  const record = {
+    id: taskId,
+    runnerId: runner.id,
+    runnerName: runner.name,
+    description: existing?.description ?? taskId,
+    tool: existing?.tool ?? 'unknown',
+    status: event.status,
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    result: event.result ?? existing?.result ?? null,
+  }
+  tasks.set(key, record)
+  saveTasks()
+}
+
 function runnerHeaders(req) {
   const token = req.headers['x-omnifleet-token']
   return {
@@ -193,12 +212,29 @@ async function proxyEvents(req, res, runner, taskId) {
   })
 
   const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
   req.on('close', () => reader.cancel().catch(() => undefined))
 
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
     res.write(value)
+    buffer += decoder.decode(value, { stream: true })
+    const chunks = buffer.split('\n\n')
+    buffer = chunks.pop() ?? ''
+
+    for (const chunk of chunks) {
+      for (const line of chunk.split(/\r?\n/)) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const event = JSON.parse(line.slice(6))
+          if (event.type === 'state') updateTaskFromStateEvent(runner, taskId, event)
+        } catch {
+          // Ignore malformed SSE data lines; the raw stream is still proxied.
+        }
+      }
+    }
   }
   res.end()
 }

@@ -746,7 +746,7 @@ The web UI can load runners from the relay:
 
 The relay can now proxy task creation, task history, event streams, approve, and apply calls to the selected runner. The relay does not store runner tokens; the web UI forwards the runner token to the relay, and the relay passes it to the runner for authorization. Task execution still happens on the runner device.
 
-When the relay proxies task creation, approve, or apply calls, it stores a task metadata record with the owning runner. `GET /api/tasks` returns the latest relay-level task records across all runners. This gives the UI a unified history surface even when tasks belong to different devices.
+When the relay proxies task creation, approve, or apply calls, it stores a task metadata record with the owning runner. While proxying the runner event stream, the relay also parses `state` events and updates the relay-level task record. `GET /api/tasks` returns the latest relay-level task records across all runners. This gives the UI a unified history surface even when tasks belong to different devices.
 
 This is the first usable routing model:
 
