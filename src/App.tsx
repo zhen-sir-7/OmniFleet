@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-type TaskState = 'draft' | 'queued' | 'running' | 'review' | 'approved' | 'applied' | 'failed'
+type TaskState = 'draft' | 'queued' | 'running' | 'review' | 'approved' | 'applied' | 'failed' | 'cancelled'
 
 type Runner = {
   id: string
@@ -151,7 +151,7 @@ export function App() {
   const logEvents = events.filter((event) => event.type === 'log')
   const diffLines = result?.diff ?? []
 
-  function taskPath(path: 'events' | 'approve' | 'apply', id: string, runnerId = selectedRunner) {
+  function taskPath(path: 'events' | 'approve' | 'apply' | 'cancel', id: string, runnerId = selectedRunner) {
     if (useRelayProxy) return `/api/tasks/${runnerId}/${id}/${path}`
     return `/api/tasks/${id}/${path}`
   }
@@ -369,6 +369,22 @@ export function App() {
     const applied = (await response.json()) as { status: TaskState; result: TaskResult | null }
     setState(applied.status)
     if (applied.result) setResult(applied.result)
+    loadHistory()
+  }
+
+  async function cancelTask() {
+    if (!taskId || !runnerOnline) return
+
+    const response = await apiFetch(taskPath('cancel', taskId), { method: 'POST' })
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string }
+      setEvents((items) => [...items, { type: 'log', level: 'error', message: payload.error ?? 'failed to cancel task' }])
+      return
+    }
+
+    const cancelled = (await response.json()) as { status: TaskState; result: TaskResult | null }
+    setState(cancelled.status)
+    if (cancelled.result) setResult(cancelled.result)
     loadHistory()
   }
 
@@ -639,6 +655,9 @@ export function App() {
             </button>
             <button className="secondary" disabled={state !== 'approved' || !result?.worktreePath} onClick={applyTask}>
               Apply patch
+            </button>
+            <button className="secondary" disabled={!['queued', 'running'].includes(state)} onClick={cancelTask}>
+              Cancel task
             </button>
           </div>
 

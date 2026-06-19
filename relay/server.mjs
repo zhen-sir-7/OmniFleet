@@ -458,6 +458,15 @@ const server = createServer(async (req, res) => {
       return
     }
 
+    const cancelMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/([^/]+)\/cancel$/)
+    if (cancelMatch && req.method === 'POST') {
+      const runner = findRunner(cancelMatch[1])
+      if (!runner) return json(res, 404, { error: 'Runner not found' })
+      const proxied = await proxyJson(req, res, runner, `/api/tasks/${cancelMatch[2]}/cancel`, { method: 'POST' })
+      if (proxied.ok && proxied.data?.id) rememberTask(runner, proxied.data)
+      return
+    }
+
     const applyMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/([^/]+)\/apply$/)
     if (applyMatch && req.method === 'POST') {
       const runner = findRunner(applyMatch[1])

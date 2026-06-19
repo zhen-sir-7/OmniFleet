@@ -369,7 +369,7 @@ select {
 }
 
 .review-actions {
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
 }
 
 .primary {
@@ -419,6 +419,11 @@ select {
 .status-pill.failed {
   color: var(--paper);
   background: var(--accent-dark);
+}
+
+.status-pill.cancelled {
+  color: var(--ink);
+  background: rgba(23, 21, 18, 0.16);
 }
 
 .node-map {

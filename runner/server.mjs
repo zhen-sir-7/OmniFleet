@@ -13,6 +13,7 @@ const taskStorePath = resolve(stateDir, 'tasks.json')
 const deviceStorePath = resolve(stateDir, 'device.json')
 const tasks = loadTasks()
 const subscribers = new Map()
+const runningProcesses = new Map()
 const device = loadDevice()
 
 function loadTasks() {
@@ -101,12 +102,14 @@ function runShell(command, options = {}) {
       env: process.env,
       windowsHide: true,
     })
+    if (options.taskId) runningProcesses.set(options.taskId, child)
     let settled = false
     const timeout = options.timeoutMs
       ? setTimeout(() => {
           if (settled) return
           settled = true
           child.kill('SIGTERM')
+          if (options.taskId) runningProcesses.delete(options.taskId)
           stderr.push(`Command timed out after ${options.timeoutMs}ms`)
           resolveRun({ ok: false, code: -2, stdout: stdout.join(''), stderr: stderr.join(''), durationMs: Date.now() - startedAt })
         }, options.timeoutMs)
@@ -128,6 +131,7 @@ function runShell(command, options = {}) {
       if (settled) return
       settled = true
       if (timeout) clearTimeout(timeout)
+      if (options.taskId) runningProcesses.delete(options.taskId)
       stderr.push(error.message)
       resolveRun({ ok: false, code: -1, stdout: stdout.join(''), stderr: stderr.join(''), durationMs: Date.now() - startedAt })
     })
@@ -136,9 +140,32 @@ function runShell(command, options = {}) {
       if (settled) return
       settled = true
       if (timeout) clearTimeout(timeout)
+      if (options.taskId) runningProcesses.delete(options.taskId)
       resolveRun({ ok: code === 0, code, stdout: stdout.join(''), stderr: stderr.join(''), durationMs: Date.now() - startedAt })
     })
   })
+}
+
+function cancelTask(taskId) {
+  const task = tasks.get(taskId)
+  if (!task) return { ok: false, status: 404, summary: 'Task not found.' }
+  if (!['queued', 'running'].includes(task.status)) return { ok: false, status: 409, summary: `Task is not cancellable from status: ${task.status}` }
+
+  const child = runningProcesses.get(taskId)
+  if (child) {
+    child.kill('SIGTERM')
+    runningProcesses.delete(taskId)
+  }
+
+  updateTask(taskId, {
+    status: 'cancelled',
+    result: {
+      ok: false,
+      summary: child ? 'Task cancellation requested; running process was terminated.' : 'Task cancelled before a process was started.',
+      cancelledAt: new Date().toISOString(),
+    },
+  })
+  return { ok: true, status: 200, task: publicTask(tasks.get(taskId)) }
 }
 
 async function commandExists(command) {
@@ -300,6 +327,7 @@ function createAdapters() {
 
         sendEvent(taskId, { type: 'log', level: 'info', message: `safe command started: ${command}` })
         const run = await runShell(command, {
+          taskId,
           cwd: project.absolutePath,
           onStdout: (chunk) => streamLines(taskId, 'stdout', chunk),
           onStderr: (chunk) => streamLines(taskId, 'stderr', chunk),
@@ -340,6 +368,7 @@ function createAdapters() {
         sendEvent(taskId, { type: 'log', level: 'info', message: 'opencode started inside isolated worktree' })
 
         const run = await runShell(command, {
+          taskId,
           cwd: workspace.path,
           timeoutMs: config.security?.taskTimeoutMs ?? 120000,
           onStdout: (chunk) => streamLines(taskId, 'stdout', chunk),
@@ -424,6 +453,7 @@ async function runTask(taskId) {
   const project = normalizeProjects().find((item) => item.id === task?.projectId)
 
   if (!task || !project) return
+  if (task.status === 'cancelled') return
 
   updateTask(taskId, { status: 'running' })
   sendEvent(taskId, { type: 'log', level: 'info', message: `task accepted by ${config.runner.name}` })
@@ -444,6 +474,7 @@ async function runTask(taskId) {
   }
 
   const run = await adapter.run({ taskId, task, project })
+  if (tasks.get(taskId)?.status === 'cancelled') return
   const git = await collectGit(project)
   const resultDiff = Array.isArray(run.agentDiff) ? run.agentDiff : git.diff
 
@@ -505,7 +536,7 @@ const server = createServer(async (req, res) => {
         tool: body.tool ?? config.runner.tools[0],
         status: 'queued',
         createdAt: new Date().toISOString(),
-      events: [],
+        events: [],
       }
       tasks.set(id, task)
       saveTasks()
@@ -533,6 +564,12 @@ const server = createServer(async (req, res) => {
       if (!task) return json(res, 404, { error: 'Task not found' })
       updateTask(task.id, { status: 'approved' })
       return json(res, 200, publicTask(task))
+    }
+
+    const cancelMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/cancel$/)
+    if (cancelMatch && req.method === 'POST') {
+      const cancelled = cancelTask(cancelMatch[1])
+      return json(res, cancelled.status, cancelled.ok ? cancelled.task : { error: cancelled.summary })
     }
 
     const applyMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/apply$/)
