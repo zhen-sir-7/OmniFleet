@@ -5,6 +5,7 @@ type TaskState = 'draft' | 'queued' | 'running' | 'review' | 'approved' | 'appli
 type Runner = {
   id: string
   name: string
+  endpoint?: string
   os: string
   status: string
   tools: string[]
@@ -53,6 +54,7 @@ type TaskRecord = {
 }
 
 const apiBase = import.meta.env.DEV ? 'http://localhost:8787' : ''
+const defaultRelayUrl = 'http://localhost:8790'
 
 const fallbackRunners: Runner[] = [
   {
@@ -101,6 +103,8 @@ export function App() {
   const [history, setHistory] = useState<TaskRecord[]>([])
   const [token, setToken] = useState(() => localStorage.getItem('omnifleet-token') ?? '')
   const [authError, setAuthError] = useState<string | null>(null)
+  const [relayUrl, setRelayUrl] = useState(() => localStorage.getItem('omnifleet-relay-url') ?? defaultRelayUrl)
+  const [relayStatus, setRelayStatus] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadRunner() {
@@ -132,11 +136,12 @@ export function App() {
 
   const currentRunner = runners.find((runner) => runner.id === selectedRunner) ?? runners[0]
   const currentProject = projects.find((project) => project.id === selectedProject) ?? projects[0]
+  const runnerBase = currentRunner.endpoint ?? apiBase
   const logEvents = events.filter((event) => event.type === 'log')
   const diffLines = result?.diff ?? []
 
   function apiFetch(path: string, options: RequestInit = {}) {
-    return fetch(`${apiBase}${path}`, {
+    return fetch(`${runnerBase}${path}`, {
       ...options,
       headers: {
         ...(options.headers ?? {}),
@@ -151,6 +156,51 @@ export function App() {
   function saveToken() {
     localStorage.setItem('omnifleet-token', token)
     setAuthError(null)
+  }
+
+  async function loadProjectsForRunner(runner: Runner) {
+    try {
+      const endpoint = runner.endpoint ?? apiBase
+      const response = await fetch(`${endpoint}/api/projects`, {
+        headers: token ? { 'X-OmniFleet-Token': token } : {},
+      })
+      if (!response.ok) throw new Error('runner projects unavailable')
+      const nextProjects = (await response.json()) as Project[]
+      setProjects(nextProjects)
+      setSelectedProject(nextProjects[0]?.id ?? fallbackProjects[0].id)
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'runner projects unavailable')
+    }
+  }
+
+  function selectRunner(runnerId: string) {
+    setSelectedRunner(runnerId)
+    const runner = runners.find((item) => item.id === runnerId)
+    if (runner) {
+      setSelectedTool(runner.tools[0] ?? 'mock-agent')
+      loadProjectsForRunner(runner)
+    }
+  }
+
+  async function loadRelayRunners() {
+    try {
+      localStorage.setItem('omnifleet-relay-url', relayUrl)
+      const response = await fetch(`${relayUrl.replace(/\/$/, '')}/api/runners`)
+      if (!response.ok) throw new Error('relay unavailable')
+      const relayRunners = (await response.json()) as Runner[]
+      if (relayRunners.length === 0) {
+        setRelayStatus('relay connected, no runners registered')
+        return
+      }
+
+      setRunners(relayRunners)
+      setSelectedRunner(relayRunners[0].id)
+      setSelectedTool(relayRunners[0].tools[0] ?? 'mock-agent')
+      loadProjectsForRunner(relayRunners[0])
+      setRelayStatus(`loaded ${relayRunners.length} runner(s) from relay`)
+    } catch (error) {
+      setRelayStatus(error instanceof Error ? error.message : 'relay unavailable')
+    }
   }
 
   async function loadHistory() {
@@ -195,7 +245,7 @@ export function App() {
     const created = (await response.json()) as { id: string }
     setTaskId(created.id)
     loadHistory()
-    const source = new EventSource(`${apiBase}/api/tasks/${created.id}/events?token=${encodeURIComponent(token)}`)
+    const source = new EventSource(`${runnerBase}/api/tasks/${created.id}/events?token=${encodeURIComponent(token)}`)
 
     source.onmessage = (message) => {
       const event = JSON.parse(message.data) as TaskEvent
@@ -325,6 +375,20 @@ export function App() {
           </div>
           {authError && <p className="token-hint">{authError}</p>}
 
+          <label className="field-label" htmlFor="relay-input">
+            Relay URL
+          </label>
+          <div className="token-row">
+            <input
+              id="relay-input"
+              value={relayUrl}
+              placeholder="http://localhost:8790"
+              onChange={(event) => setRelayUrl(event.target.value)}
+            />
+            <button className="secondary compact" onClick={loadRelayRunners}>Load</button>
+          </div>
+          {relayStatus && <p className="token-hint neutral-hint">{relayStatus}</p>}
+
           <label className="field-label" htmlFor="task-input">
             Development request
           </label>
@@ -336,6 +400,20 @@ export function App() {
           />
 
           <div className="selector-grid">
+            <label>
+              <span>Runner</span>
+              <select
+                value={selectedRunner}
+                onChange={(event) => selectRunner(event.target.value)}
+                disabled={state === 'running' || state === 'queued'}
+              >
+                {runners.map((runner) => (
+                  <option key={runner.id} value={runner.id}>
+                    {runner.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label>
               <span>Project</span>
               <select
@@ -374,6 +452,7 @@ export function App() {
             <p>
               {currentRunner.os} / {currentRunner.status} / {currentProject.defaultCommand}
             </p>
+            {currentRunner.endpoint && <p>{currentRunner.endpoint}</p>}
             <p>{currentProject.absolutePath}</p>
           </div>
 

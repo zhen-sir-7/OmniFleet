@@ -268,7 +268,7 @@ select {
 
 .selector-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   margin-top: 18px;
 }
@@ -285,6 +285,10 @@ select {
   color: var(--accent-dark);
   font-size: 0.82rem;
   font-weight: 800;
+}
+
+.neutral-hint {
+  color: var(--muted);
 }
 
 .route-card {

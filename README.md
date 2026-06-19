@@ -707,7 +707,16 @@ Registered runners are stored locally at:
 
 When a runner starts with `OMNIFLEET_RELAY_URL`, it self-registers with the relay and refreshes its registration every 30 seconds. The relay marks runners as `online` if they were seen in the last 45 seconds, otherwise `stale`.
 
-This relay does not forward tasks yet. It only establishes runner discovery and registration, which is the first infrastructure step toward multi-device routing.
+The web UI can load runners from the relay:
+
+1. Start the relay with `npm run relay`.
+2. Start a runner with `OMNIFLEET_RELAY_URL`.
+3. Paste the runner token from `.omnifleet/device.json` into the UI.
+4. Keep the relay URL as `http://localhost:8790` or enter another relay endpoint.
+5. Click `Load` beside the relay URL.
+6. Select a discovered runner from the `Runner` dropdown.
+
+Tasks are still executed by direct calls to the selected runner endpoint. The relay does not forward tasks yet. It only establishes runner discovery and registration, which is the first infrastructure step toward multi-device routing.
 
 Task history is stored locally at:
 
