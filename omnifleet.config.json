@@ -1,0 +1,22 @@
+{
+  "runner": {
+    "id": "local-runner-01",
+    "name": "Local OmniFleet Runner",
+    "os": "windows",
+    "tools": ["build-check", "mock-agent"],
+    "capabilities": ["read_project", "run_safe_command", "stream_logs", "collect_result"]
+  },
+  "projects": [
+    {
+      "id": "omnifleet",
+      "name": "OmniFleet",
+      "path": ".",
+      "allowedCommands": ["npm run build"],
+      "defaultCommand": "npm run build"
+    }
+  ],
+  "security": {
+    "denyFiles": [".env", ".env.*", "*.pem", "*.key", "id_rsa", "id_ed25519", ".ssh", ".aws", ".npmrc", "credentials"],
+    "denyCommands": ["git push", "git reset --hard", "rm -rf", "del /s", "curl | sh", "npm publish", "pnpm publish", "kubectl apply", "terraform apply"]
+  }
+}
