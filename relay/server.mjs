@@ -282,11 +282,23 @@ function startProbeLoop() {
 }
 
 async function proxyJson(req, res, runner, path, options = {}) {
-  const response = await fetch(`${runner.endpoint}${path}`, {
-    method: options.method ?? req.method,
-    headers: runnerHeaders(req),
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), Number(process.env.OMNIFLEET_RELAY_PROXY_TIMEOUT_MS ?? 10000))
+  let response
+  try {
+    response = await fetch(`${runner.endpoint}${path}`, {
+      method: options.method ?? req.method,
+      headers: runnerHeaders(req),
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Runner proxy request failed'
+    json(res, 502, { error: message, runnerId: runner.id, endpoint: runner.endpoint })
+    return { ok: false, status: 502, data: null }
+  } finally {
+    clearTimeout(timeout)
+  }
   const text = await response.text()
   res.writeHead(response.status, {
     'Content-Type': response.headers.get('content-type') ?? 'application/json; charset=utf-8',

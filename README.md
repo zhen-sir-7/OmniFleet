@@ -746,6 +746,12 @@ The probe interval can be changed with:
 OMNIFLEET_RELAY_PROBE_INTERVAL_MS=15000
 ```
 
+Runner proxy requests time out after 10 seconds by default. This can be changed with:
+
+```text
+OMNIFLEET_RELAY_PROXY_TIMEOUT_MS=10000
+```
+
 Relay runner records include `lastProbeAt`, `lastProbeOk`, and `lastProbeError` for debugging reachability.
 
 The web UI can load runners from the relay:
