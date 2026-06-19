@@ -698,6 +698,7 @@ The relay exposes:
 GET  /api/health
 GET  /api/runners
 POST /api/runners/register
+DELETE /api/runners/:runnerId
 GET  /api/tasks
 POST /api/tasks
 POST /api/tasks/route

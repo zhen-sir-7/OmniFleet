@@ -66,7 +66,7 @@ function json(res, status, data) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   })
   res.end(JSON.stringify(data))
@@ -398,6 +398,13 @@ const server = createServer(async (req, res) => {
       saveRegistry()
       probeRunner(runner)
       return json(res, 200, publicRunner(runner))
+    }
+
+    const runnerDeleteMatch = url.pathname.match(/^\/api\/runners\/([^/]+)$/)
+    if (runnerDeleteMatch && req.method === 'DELETE') {
+      const deleted = runners.delete(runnerDeleteMatch[1])
+      saveRegistry()
+      return json(res, deleted ? 200 : 404, deleted ? { ok: true } : { error: 'Runner not found' })
     }
 
     if (url.pathname === '/api/tasks' && req.method === 'GET') {
