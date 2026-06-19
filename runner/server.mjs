@@ -393,6 +393,29 @@ async function runnerPayload() {
   }
 }
 
+async function registerWithRelay() {
+  const relayUrl = process.env.OMNIFLEET_RELAY_URL
+  if (!relayUrl) return
+
+  try {
+    const payload = await runnerPayload()
+    await fetch(`${relayUrl.replace(/\/$/, '')}/api/runners/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: payload.deviceId,
+        name: payload.name,
+        endpoint: process.env.OMNIFLEET_RUNNER_URL ?? `http://localhost:${port}`,
+        tools: payload.tools,
+        projects: payload.projects,
+        capabilities: payload.capabilities,
+      }),
+    })
+  } catch (error) {
+    console.warn(`Relay registration failed: ${error instanceof Error ? error.message : 'unknown error'}`)
+  }
+}
+
 async function runTask(taskId) {
   const task = tasks.get(taskId)
   const project = normalizeProjects().find((item) => item.id === task?.projectId)
@@ -545,4 +568,6 @@ const server = createServer(async (req, res) => {
 
 server.listen(port, () => {
   console.log(`OmniFleet runner listening on http://localhost:${port}`)
+  registerWithRelay()
+  if (process.env.OMNIFLEET_RELAY_URL) setInterval(registerWithRelay, 30000)
 })

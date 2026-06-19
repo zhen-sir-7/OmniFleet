@@ -499,6 +499,24 @@ Start the local runner in another terminal:
 npm run runner
 ```
 
+Start the local relay:
+
+```bash
+npm run relay
+```
+
+Register a runner with the relay by starting the runner with `OMNIFLEET_RELAY_URL`:
+
+```bash
+OMNIFLEET_RELAY_URL=http://localhost:8790 npm run runner
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:OMNIFLEET_RELAY_URL = "http://localhost:8790"; npm run runner
+```
+
 Then open the Vite URL shown in the terminal. The frontend will connect to `http://localhost:8787` during development.
 
 Run the built app and runner together:
@@ -662,6 +680,34 @@ GET /api/tasks/:id/events?token=<token>
 ```
 
 This is a local-first development guard, not a complete remote security model. A future relay version should use stronger device registration, token rotation, TLS, and scoped permissions.
+
+## Local Relay
+
+The first relay lives in:
+
+```text
+relay/server.mjs
+```
+
+It is a local coordination service for the first step toward a personal device network.
+
+The relay exposes:
+
+```text
+GET  /api/health
+GET  /api/runners
+POST /api/runners/register
+```
+
+Registered runners are stored locally at:
+
+```text
+.omnifleet/relay-runners.json
+```
+
+When a runner starts with `OMNIFLEET_RELAY_URL`, it self-registers with the relay and refreshes its registration every 30 seconds. The relay marks runners as `online` if they were seen in the last 45 seconds, otherwise `stale`.
+
+This relay does not forward tasks yet. It only establishes runner discovery and registration, which is the first infrastructure step toward multi-device routing.
 
 Task history is stored locally at:
 
