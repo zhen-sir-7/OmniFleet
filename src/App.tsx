@@ -263,8 +263,16 @@ export function App() {
     })
 
     if (!response.ok) {
+      let message = 'failed to create task on local runner'
+      try {
+        const payload = (await response.json()) as { error?: string; diagnostics?: unknown }
+        message = payload.error ?? message
+        if (payload.diagnostics) message = `${message}: ${JSON.stringify(payload.diagnostics)}`
+      } catch {
+        // Keep fallback message.
+      }
       setState('failed')
-      setEvents([{ type: 'log', level: 'error', message: 'failed to create task on local runner' }])
+      setEvents([{ type: 'log', level: 'error', message }])
       return
     }
 

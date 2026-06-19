@@ -214,9 +214,9 @@ function normalizeName(value) {
 function routeRunner(body) {
   const candidates = Array.from(runners.values())
     .map((runner) => ({ ...runner, status: runnerStatus(runner) }))
-    .filter((runner) => runner.status === 'online')
+  const online = candidates.filter((runner) => runner.status === 'online')
 
-  const scored = candidates
+  const evaluated = online
     .map((runner) => {
       const tools = runner.tools ?? []
       const projects = runner.projects ?? []
@@ -233,11 +233,32 @@ function routeRunner(body) {
         reason: `online runner matched project=${body.projectId ?? 'any'} and tool=${body.tool ?? 'any'}`,
       }
     })
+
+  const scored = evaluated
     .filter((item) => item.toolMatch && item.projectMatch)
     .sort((a, b) => b.score - a.score)
 
   const selected = scored[0]
-  if (!selected) return null
+  if (!selected) {
+    return {
+      runner: null,
+      diagnostics: {
+        requestedProject: body.projectId ?? null,
+        requestedTool: body.tool ?? null,
+        totalRunners: candidates.length,
+        onlineRunners: online.length,
+        evaluated: evaluated.map((item) => ({
+          runnerId: item.runner.id,
+          runnerName: item.runner.name,
+          status: item.runner.status,
+          tools: item.runner.tools ?? [],
+          projects: item.runner.projects ?? [],
+          toolMatch: item.toolMatch,
+          projectMatch: item.projectMatch,
+        })),
+      },
+    }
+  }
   return {
     runner: selected.runner,
     decision: {
@@ -387,7 +408,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/api/tasks/route' && req.method === 'POST') {
       const body = await readBody(req)
       const routed = routeRunner(body)
-      if (!routed) return json(res, 409, { error: 'No online runner matches the requested project and tool.' })
+      if (!routed?.runner) return json(res, 409, { error: 'No online runner matches the requested project and tool.', diagnostics: routed?.diagnostics ?? null })
       const { runner, decision } = routed
       const routedBody = { ...body, runnerId: runner.id }
       const proxied = await proxyJson(req, res, runner, '/api/tasks', { method: 'POST', body: routedBody })
