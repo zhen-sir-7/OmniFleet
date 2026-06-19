@@ -548,6 +548,7 @@ Implemented:
 15. Responsive desktop and mobile layout.
 16. Offline demo fallback when the runner is not available.
 17. Persistent local task history.
+18. Local device identity and runner token authentication.
 
 Not implemented yet:
 
@@ -624,6 +625,43 @@ The approval flow is intentionally two-stage:
 2. `apply`: applies the approved worktree patch to the main workspace index, only if the main workspace is clean.
 
 This prevents a UI approval click from silently mutating the main project.
+
+## Device Token
+
+On first start, the runner creates a local device identity file:
+
+```text
+.omnifleet/device.json
+```
+
+It contains:
+
+```json
+{
+  "id": "local-runner-01",
+  "name": "Local OmniFleet Runner",
+  "token": "...",
+  "createdAt": "..."
+}
+```
+
+All runner API endpoints except `GET /api/health` require authentication.
+
+HTTP requests must include:
+
+```text
+X-OmniFleet-Token: <token>
+```
+
+The web UI includes a runner token field. Paste the token from `.omnifleet/device.json` and click `Save`. The token is stored in browser `localStorage` for local development.
+
+Server-Sent Events use a query token because the browser `EventSource` API does not support custom headers:
+
+```text
+GET /api/tasks/:id/events?token=<token>
+```
+
+This is a local-first development guard, not a complete remote security model. A future relay version should use stronger device registration, token rotation, TLS, and scoped permissions.
 
 Task history is stored locally at:
 

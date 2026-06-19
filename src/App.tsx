@@ -99,13 +99,15 @@ export function App() {
   const [runnerOnline, setRunnerOnline] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [history, setHistory] = useState<TaskRecord[]>([])
+  const [token, setToken] = useState(() => localStorage.getItem('omnifleet-token') ?? '')
+  const [authError, setAuthError] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadRunner() {
       try {
         const [runnerResponse, projectResponse] = await Promise.all([
-          fetch(`${apiBase}/api/runners`),
-          fetch(`${apiBase}/api/projects`),
+          apiFetch('/api/runners'),
+          apiFetch('/api/projects'),
         ])
         if (!runnerResponse.ok || !projectResponse.ok) throw new Error('runner unavailable')
 
@@ -117,23 +119,43 @@ export function App() {
         setSelectedProject(nextProjects[0]?.id ?? fallbackProjects[0].id)
         setSelectedTool(nextRunners[0]?.tools[0] ?? 'mock-agent')
         setRunnerOnline(true)
+        setAuthError(null)
         loadHistory()
-      } catch {
+      } catch (error) {
         setRunnerOnline(false)
+        setAuthError(error instanceof Error ? error.message : 'runner unavailable')
       }
     }
 
     loadRunner()
-  }, [])
+  }, [token])
 
   const currentRunner = runners.find((runner) => runner.id === selectedRunner) ?? runners[0]
   const currentProject = projects.find((project) => project.id === selectedProject) ?? projects[0]
   const logEvents = events.filter((event) => event.type === 'log')
   const diffLines = result?.diff ?? []
 
+  function apiFetch(path: string, options: RequestInit = {}) {
+    return fetch(`${apiBase}${path}`, {
+      ...options,
+      headers: {
+        ...(options.headers ?? {}),
+        ...(token ? { 'X-OmniFleet-Token': token } : {}),
+      },
+    }).then((response) => {
+      if (response.status === 401) throw new Error('runner token required')
+      return response
+    })
+  }
+
+  function saveToken() {
+    localStorage.setItem('omnifleet-token', token)
+    setAuthError(null)
+  }
+
   async function loadHistory() {
     try {
-      const response = await fetch(`${apiBase}/api/tasks`)
+      const response = await apiFetch('/api/tasks')
       if (!response.ok) return
       setHistory((await response.json()) as TaskRecord[])
     } catch {
@@ -153,7 +175,7 @@ export function App() {
       return
     }
 
-    const response = await fetch(`${apiBase}/api/tasks`, {
+    const response = await apiFetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -173,7 +195,7 @@ export function App() {
     const created = (await response.json()) as { id: string }
     setTaskId(created.id)
     loadHistory()
-    const source = new EventSource(`${apiBase}/api/tasks/${created.id}/events`)
+    const source = new EventSource(`${apiBase}/api/tasks/${created.id}/events?token=${encodeURIComponent(token)}`)
 
     source.onmessage = (message) => {
       const event = JSON.parse(message.data) as TaskEvent
@@ -215,7 +237,7 @@ export function App() {
 
   async function approveTask() {
     if (taskId && runnerOnline) {
-      const response = await fetch(`${apiBase}/api/tasks/${taskId}/approve`, { method: 'POST' })
+      const response = await apiFetch(`/api/tasks/${taskId}/approve`, { method: 'POST' })
       if (response.ok) {
         const approved = (await response.json()) as { status: TaskState; result: TaskResult | null }
         setState(approved.status)
@@ -232,7 +254,7 @@ export function App() {
     if (!taskId || !runnerOnline) return
 
     setApplyError(null)
-    const response = await fetch(`${apiBase}/api/tasks/${taskId}/apply`, { method: 'POST' })
+    const response = await apiFetch(`/api/tasks/${taskId}/apply`, { method: 'POST' })
     if (!response.ok) {
       const payload = (await response.json()) as { error?: string }
       setApplyError(payload.error ?? 'failed to apply approved result')
@@ -287,6 +309,21 @@ export function App() {
           <div className={runnerOnline ? 'connection live' : 'connection demo'}>
             {runnerOnline ? 'Local runner connected' : 'Runner offline: using demo mode'}
           </div>
+
+          <label className="field-label" htmlFor="token-input">
+            Runner token
+          </label>
+          <div className="token-row">
+            <input
+              id="token-input"
+              type="password"
+              value={token}
+              placeholder="paste .omnifleet/device.json token"
+              onChange={(event) => setToken(event.target.value)}
+            />
+            <button className="secondary compact" onClick={saveToken}>Save</button>
+          </div>
+          {authError && <p className="token-hint">{authError}</p>}
 
           <label className="field-label" htmlFor="task-input">
             Development request

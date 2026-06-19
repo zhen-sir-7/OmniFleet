@@ -1,4 +1,5 @@
 import { createServer } from 'node:http'
+import { randomBytes } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
@@ -9,8 +10,10 @@ const config = JSON.parse(readFileSync(join(root, 'omnifleet.config.json'), 'utf
 const port = Number(process.env.OMNIFLEET_PORT ?? 8787)
 const stateDir = resolve(root, '.omnifleet')
 const taskStorePath = resolve(stateDir, 'tasks.json')
+const deviceStorePath = resolve(stateDir, 'device.json')
 const tasks = loadTasks()
 const subscribers = new Map()
+const device = loadDevice()
 
 function loadTasks() {
   try {
@@ -26,6 +29,34 @@ function saveTasks() {
   mkdirSync(stateDir, { recursive: true })
   const items = Array.from(tasks.values()).slice(-100)
   writeFileSync(taskStorePath, JSON.stringify(items, null, 2), 'utf8')
+}
+
+function loadDevice() {
+  mkdirSync(stateDir, { recursive: true })
+  try {
+    if (existsSync(deviceStorePath)) return JSON.parse(readFileSync(deviceStorePath, 'utf8'))
+  } catch {
+    // Regenerate below if the local device file is unreadable.
+  }
+
+  const nextDevice = {
+    id: config.runner.id,
+    name: config.runner.name,
+    token: randomBytes(24).toString('hex'),
+    createdAt: new Date().toISOString(),
+  }
+  writeFileSync(deviceStorePath, JSON.stringify(nextDevice, null, 2), 'utf8')
+  return nextDevice
+}
+
+function unauthorized(res) {
+  return json(res, 401, { error: 'Missing or invalid X-OmniFleet-Token header.' })
+}
+
+function isAuthorized(req, url) {
+  const token = req.headers['x-omnifleet-token']
+  const queryToken = url.searchParams.get('token')
+  return (typeof token === 'string' && token === device.token) || queryToken === device.token
 }
 
 function json(res, status, data) {
@@ -355,6 +386,7 @@ async function availableTools() {
 async function runnerPayload() {
   return {
     ...config.runner,
+    deviceId: device.id,
     tools: await availableTools(),
     status: 'online',
     projects: config.projects.map((project) => project.name),
@@ -430,7 +462,9 @@ const server = createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return json(res, 204, {})
 
   try {
-    if (url.pathname === '/api/health') return json(res, 200, { ok: true, runner: await runnerPayload() })
+    if (url.pathname === '/api/health') return json(res, 200, { ok: true, tokenRequired: true, runner: { id: device.id, name: device.name } })
+    if (url.pathname.startsWith('/api/') && !isAuthorized(req, url)) return unauthorized(res)
+
     if (url.pathname === '/api/runners') return json(res, 200, [await runnerPayload()])
     if (url.pathname === '/api/projects') return json(res, 200, normalizeProjects())
 

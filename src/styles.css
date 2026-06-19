@@ -35,6 +35,7 @@ body {
 
 button,
 textarea,
+input,
 select {
   font: inherit;
 }
@@ -231,6 +232,7 @@ h2 {
 }
 
 textarea,
+input,
 select {
   width: 100%;
   border: 1px solid var(--line);
@@ -240,8 +242,15 @@ select {
 }
 
 textarea:focus,
+input:focus,
 select:focus {
   box-shadow: 0 0 0 3px rgba(229, 83, 45, 0.22);
+}
+
+input {
+  min-height: 46px;
+  padding: 0 12px;
+  outline: none;
 }
 
 textarea {
@@ -262,6 +271,20 @@ select {
   grid-template-columns: 1fr 1fr;
   gap: 14px;
   margin-top: 18px;
+}
+
+.token-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.token-hint {
+  margin: -8px 0 16px;
+  color: var(--accent-dark);
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .route-card {
