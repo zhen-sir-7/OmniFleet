@@ -308,6 +308,10 @@ select {
   margin-top: 22px;
 }
 
+.review-actions {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .primary {
   background: var(--ink);
   color: var(--paper);
@@ -345,6 +349,11 @@ select {
 .status-pill.approved {
   color: var(--paper);
   background: var(--ink);
+}
+
+.status-pill.applied {
+  color: var(--paper);
+  background: var(--green);
 }
 
 .status-pill.failed {
@@ -504,6 +513,11 @@ select {
   color: var(--green);
   font-weight: 800;
   line-height: 1.45;
+}
+
+.error-note {
+  background: rgba(229, 83, 45, 0.12);
+  color: var(--accent-dark);
 }
 
 @media (max-width: 1120px) {

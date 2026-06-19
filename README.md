@@ -588,6 +588,7 @@ POST /api/tasks
 GET  /api/tasks/:id
 GET  /api/tasks/:id/events
 POST /api/tasks/:id/approve
+POST /api/tasks/:id/apply
 ```
 
 The execution model is deliberately conservative:
@@ -596,7 +597,9 @@ The execution model is deliberately conservative:
 2. The default task command is `npm run build`.
 3. `opencode` runs inside a per-task git worktree under `.omnifleet/worktrees`.
 4. Push, publish, destructive shell, deployment, and secret-reading operations are not implemented.
-5. Approval only approves the task result; it does not commit, push, or apply worktree changes to the main workspace.
+5. Approval only approves the task result; it does not commit or push code.
+6. Applying a task is a separate action that checks the main workspace is clean before patching.
+7. Applying uses the isolated worktree diff and `git apply --index`; commit and push remain explicit future actions.
 
 The runner now has a minimal adapter registry:
 
@@ -612,5 +615,12 @@ Each task result includes git metadata when available:
 2. `git status --short` output.
 3. A bounded `git diff --no-ext-diff` result for review.
 4. Worktree path, branch, and agent-side git status when using `opencode`.
+
+The approval flow is intentionally two-stage:
+
+1. `approve`: marks the reviewed result as trusted enough to apply.
+2. `apply`: applies the approved worktree patch to the main workspace index, only if the main workspace is clean.
+
+This prevents a UI approval click from silently mutating the main project.
 
 This gives OmniFleet a real but safe first landing point: the user can dispatch a task to a local runner and observe an actual project command execute with streamed logs.

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-type TaskState = 'draft' | 'queued' | 'running' | 'review' | 'approved' | 'failed'
+type TaskState = 'draft' | 'queued' | 'running' | 'review' | 'approved' | 'applied' | 'failed'
 
 type Runner = {
   id: string
@@ -31,6 +31,8 @@ type TaskResult = {
   worktreePath?: string
   worktreeBranch?: string
   agentGitStatus?: string
+  applied?: boolean
+  appliedAt?: string
 }
 
 type TaskEvent = {
@@ -86,6 +88,7 @@ export function App() {
   const [result, setResult] = useState<TaskResult | null>(null)
   const [taskId, setTaskId] = useState<string | null>(null)
   const [runnerOnline, setRunnerOnline] = useState(false)
+  const [applyError, setApplyError] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadRunner() {
@@ -122,6 +125,7 @@ export function App() {
     setEvents([])
     setResult(null)
     setTaskId(null)
+    setApplyError(null)
 
     if (!runnerOnline) {
       runOfflineDemo()
@@ -156,7 +160,7 @@ export function App() {
       if (event.type === 'state' && event.status) {
         setState(event.status)
         if (event.result) setResult(event.result)
-        if (event.status === 'review' || event.status === 'approved' || event.status === 'failed') {
+        if (event.status === 'review' || event.status === 'approved' || event.status === 'applied' || event.status === 'failed') {
           source.close()
         }
       }
@@ -200,11 +204,28 @@ export function App() {
     setState('approved')
   }
 
+  async function applyTask() {
+    if (!taskId || !runnerOnline) return
+
+    setApplyError(null)
+    const response = await fetch(`${apiBase}/api/tasks/${taskId}/apply`, { method: 'POST' })
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string }
+      setApplyError(payload.error ?? 'failed to apply approved result')
+      return
+    }
+
+    const applied = (await response.json()) as { status: TaskState; result: TaskResult | null }
+    setState(applied.status)
+    if (applied.result) setResult(applied.result)
+  }
+
   function resetTask() {
     setState('draft')
     setEvents([])
     setResult(null)
     setTaskId(null)
+    setApplyError(null)
   }
 
   return (
@@ -366,6 +387,7 @@ export function App() {
                   {result.worktreeBranch && <p>worktree branch: {result.worktreeBranch}</p>}
                   {result.worktreePath && <p>worktree path: {result.worktreePath}</p>}
                   {result.agentGitStatus && <p>agent status: {result.agentGitStatus}</p>}
+                  {result.appliedAt && <p>applied at: {result.appliedAt}</p>}
                   {diffLines.map((line) => <p key={line}>{line}</p>)}
                 </>
               ) : (
@@ -381,10 +403,21 @@ export function App() {
             <button className="secondary" disabled={state !== 'review'} onClick={startTask}>
               Continue task
             </button>
+            <button className="secondary" disabled={state !== 'approved' || !result?.worktreePath} onClick={applyTask}>
+              Apply patch
+            </button>
           </div>
 
           {state === 'approved' && (
-            <p className="approval-note">Approved locally. Commit and push still require explicit confirmation.</p>
+            <p className="approval-note">Approved locally. Apply patch is separate; commit and push still require explicit confirmation.</p>
+          )}
+
+          {state === 'applied' && (
+            <p className="approval-note">Patch applied to the main workspace index. Commit and push still require explicit confirmation.</p>
+          )}
+
+          {applyError && (
+            <p className="approval-note error-note">{applyError}</p>
           )}
         </aside>
       </section>

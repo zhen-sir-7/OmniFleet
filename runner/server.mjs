@@ -160,6 +160,51 @@ async function collectGit(project) {
   }
 }
 
+function shellQuote(path) {
+  return `"${String(path).replace(/"/g, '\\"')}"`
+}
+
+async function applyTaskResult(taskId) {
+  const task = tasks.get(taskId)
+  const project = normalizeProjects().find((item) => item.id === task?.projectId)
+
+  if (!task || !project) return { ok: false, summary: 'Task or project not found.' }
+  if (task.status !== 'approved') return { ok: false, summary: 'Task must be approved before applying.' }
+  if (!task.result?.worktreePath) return { ok: false, summary: 'Task has no isolated worktree result to apply.' }
+  if (!existsSync(task.result.worktreePath)) return { ok: false, summary: 'Task worktree no longer exists.' }
+
+  const mainGit = await collectGit(project)
+  if (mainGit.available && mainGit.status !== 'clean') {
+    return { ok: false, summary: `Main workspace is not clean: ${mainGit.status}` }
+  }
+
+  const diff = await runShell('git diff --binary', { cwd: task.result.worktreePath })
+  if (!diff.ok || !diff.stdout.trim()) return { ok: false, summary: 'No worktree diff to apply.' }
+
+  const patchPath = resolve(root, '.omnifleet', `${taskId}.patch`)
+  mkdirSync(resolve(root, '.omnifleet'), { recursive: true })
+  await import('node:fs').then((fs) => fs.writeFileSync(patchPath, diff.stdout, 'utf8'))
+
+  const check = await runShell(`git apply --check ${shellQuote(patchPath)}`, { cwd: project.absolutePath })
+  if (!check.ok) return { ok: false, summary: check.stderr || check.stdout || 'Patch does not apply cleanly.' }
+
+  const apply = await runShell(`git apply --index ${shellQuote(patchPath)}`, { cwd: project.absolutePath })
+  if (!apply.ok) return { ok: false, summary: apply.stderr || apply.stdout || 'Patch apply failed.' }
+
+  const appliedGit = await collectGit(project)
+  task.status = 'applied'
+  task.result = {
+    ...task.result,
+    applied: true,
+    appliedAt: new Date().toISOString(),
+    summary: 'Approved worktree patch applied to the main workspace index. Commit and push still require explicit action.',
+    gitStatus: appliedGit.status,
+    diff: appliedGit.diff,
+  }
+  sendEvent(taskId, { type: 'state', status: task.status, result: task.result })
+  return { ok: true, task: publicTask(task) }
+}
+
 async function prepareTaskWorkspace(taskId, project) {
   const isRepo = await runShell('git rev-parse --is-inside-work-tree', { cwd: project.absolutePath })
   if (!isRepo.ok) return { ok: false, path: project.absolutePath, summary: 'Project is not a git repository; refusing agent execution.' }
@@ -399,6 +444,12 @@ const server = createServer(async (req, res) => {
       if (!task) return json(res, 404, { error: 'Task not found' })
       updateTask(task.id, { status: 'approved' })
       return json(res, 200, publicTask(task))
+    }
+
+    const applyMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/apply$/)
+    if (applyMatch && req.method === 'POST') {
+      const applied = await applyTaskResult(applyMatch[1])
+      return applied.ok ? json(res, 200, applied.task) : json(res, 409, { error: applied.summary })
     }
 
     const eventMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/events$/)
