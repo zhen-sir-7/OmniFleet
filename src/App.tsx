@@ -53,6 +53,11 @@ type TaskRecord = {
   status: TaskState
   createdAt: string
   result: TaskResult | null
+  routing?: {
+    mode: string
+    selectedRunnerName: string
+    reason: string
+  } | null
 }
 
 const apiBase = import.meta.env.DEV ? 'http://localhost:8787' : ''
@@ -650,6 +655,7 @@ export function App() {
               >
                 <span>{item.status}</span>
                 <strong>{item.description || item.id}</strong>
+                {item.routing && <small>{item.routing.mode}: {item.routing.selectedRunnerName}</small>}
                 <small>{item.runnerName ? `${item.runnerName} / ` : ''}{item.tool} / {new Date(item.createdAt).toLocaleString()}</small>
               </button>
             ))}

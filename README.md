@@ -763,7 +763,7 @@ The relay can now proxy task creation, task history, event streams, approve, and
 
 When the relay proxies task creation, approve, or apply calls, it stores a task metadata record with the owning runner. While proxying the runner event stream, the relay also parses `state` events and updates the relay-level task record. `GET /api/tasks` returns the latest relay-level task records across all runners. This gives the UI a unified history surface even when tasks belong to different devices.
 
-The relay can also route a task automatically with `POST /api/tasks/route`. It only considers `online` runners and requires matching project and tool capabilities. In the UI, enable `Auto route to an online matching runner` to use this path.
+The relay can also route a task automatically with `POST /api/tasks/route`. It only considers `online` runners and requires matching project and tool capabilities. In the UI, enable `Auto route to an online matching runner` to use this path. Relay task history stores routing metadata including selected runner, score, candidate count, and decision reason.
 
 This is the first usable routing model:
 

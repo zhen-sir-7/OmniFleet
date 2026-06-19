@@ -125,11 +125,12 @@ function publicTask(task) {
     status: task.status,
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
+    routing: task.routing ?? null,
     result: task.result ?? null,
   }
 }
 
-function rememberTask(runner, task) {
+function rememberTask(runner, task, metadata = {}) {
   const record = {
     id: task.id,
     runnerId: runner.id,
@@ -139,6 +140,7 @@ function rememberTask(runner, task) {
     status: task.status,
     createdAt: task.createdAt,
     updatedAt: new Date().toISOString(),
+    routing: metadata.routing ?? tasks.get(`${runner.id}:${task.id}`)?.routing ?? null,
     result: task.result ?? null,
   }
   tasks.set(`${runner.id}:${task.id}`, record)
@@ -159,6 +161,7 @@ function updateTaskFromStateEvent(runner, taskId, event) {
     status: event.status,
     createdAt: existing?.createdAt ?? new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    routing: existing?.routing ?? null,
     result: event.result ?? existing?.result ?? null,
   }
   tasks.set(key, record)
@@ -222,12 +225,31 @@ function routeRunner(body) {
         ? projects.some((project) => normalizeName(project) === normalizeName(body.projectId))
         : true
       const score = (toolMatch ? 10 : 0) + (projectMatch ? 10 : 0) + (runner.lastProbeOk ? 2 : 0)
-      return { runner, score, toolMatch, projectMatch }
+      return {
+        runner,
+        score,
+        toolMatch,
+        projectMatch,
+        reason: `online runner matched project=${body.projectId ?? 'any'} and tool=${body.tool ?? 'any'}`,
+      }
     })
     .filter((item) => item.toolMatch && item.projectMatch)
     .sort((a, b) => b.score - a.score)
 
-  return scored[0]?.runner ?? null
+  const selected = scored[0]
+  if (!selected) return null
+  return {
+    runner: selected.runner,
+    decision: {
+      mode: 'auto',
+      selectedRunnerId: selected.runner.id,
+      selectedRunnerName: selected.runner.name,
+      score: selected.score,
+      reason: selected.reason,
+      candidateCount: candidates.length,
+      decidedAt: new Date().toISOString(),
+    },
+  }
 }
 
 function startProbeLoop() {
@@ -364,11 +386,12 @@ const server = createServer(async (req, res) => {
 
     if (url.pathname === '/api/tasks/route' && req.method === 'POST') {
       const body = await readBody(req)
-      const runner = routeRunner(body)
-      if (!runner) return json(res, 409, { error: 'No online runner matches the requested project and tool.' })
+      const routed = routeRunner(body)
+      if (!routed) return json(res, 409, { error: 'No online runner matches the requested project and tool.' })
+      const { runner, decision } = routed
       const routedBody = { ...body, runnerId: runner.id }
       const proxied = await proxyJson(req, res, runner, '/api/tasks', { method: 'POST', body: routedBody })
-      if (proxied.ok && proxied.data?.id) rememberTask(runner, proxied.data)
+      if (proxied.ok && proxied.data?.id) rememberTask(runner, proxied.data, { routing: decision })
       return
     }
 
