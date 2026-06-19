@@ -26,6 +26,8 @@ type TaskResult = {
   durationMs?: number
   summary: string
   diff?: string[]
+  gitStatus?: string
+  gitAvailable?: boolean
 }
 
 type TaskEvent = {
@@ -355,6 +357,9 @@ export function App() {
                 <>
                   <p>{result.summary}</p>
                   {typeof result.durationMs === 'number' && <p>duration: {result.durationMs}ms</p>}
+                  {typeof result.gitAvailable === 'boolean' && (
+                    <p>git: {result.gitAvailable ? result.gitStatus : 'not available'}</p>
+                  )}
                   {diffLines.map((line) => <p key={line}>{line}</p>)}
                 </>
               ) : (

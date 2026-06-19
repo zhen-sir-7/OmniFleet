@@ -36,15 +36,59 @@ function readBody(req) {
   })
 }
 
+function commandParts(command) {
+  if (process.platform === 'win32') return { command: 'cmd.exe', args: ['/d', '/s', '/c', command] }
+  return { command: 'sh', args: ['-c', command] }
+}
+
+function runShell(command, options = {}) {
+  return new Promise((resolveRun) => {
+    const startedAt = Date.now()
+    const parts = commandParts(command)
+    const stdout = []
+    const stderr = []
+    const child = spawn(parts.command, parts.args, {
+      cwd: options.cwd ?? root,
+      env: process.env,
+      windowsHide: true,
+    })
+
+    child.stdout.on('data', (chunk) => {
+      const text = chunk.toString()
+      stdout.push(text)
+      options.onStdout?.(text)
+    })
+
+    child.stderr.on('data', (chunk) => {
+      const text = chunk.toString()
+      stderr.push(text)
+      options.onStderr?.(text)
+    })
+
+    child.on('error', (error) => {
+      stderr.push(error.message)
+      resolveRun({ ok: false, code: -1, stdout: stdout.join(''), stderr: stderr.join(''), durationMs: Date.now() - startedAt })
+    })
+
+    child.on('close', (code) => {
+      resolveRun({ ok: code === 0, code, stdout: stdout.join(''), stderr: stderr.join(''), durationMs: Date.now() - startedAt })
+    })
+  })
+}
+
+async function commandExists(command) {
+  const checkCommand = process.platform === 'win32' ? `where ${command}` : `command -v ${command}`
+  const result = await runShell(checkCommand)
+  return result.ok
+}
+
 function sendEvent(taskId, event) {
   const task = tasks.get(taskId)
   if (!task) return
 
   task.events.push(event)
   const clients = subscribers.get(taskId) ?? new Set()
-  for (const res of clients) {
-    res.write(`data: ${JSON.stringify(event)}\n\n`)
-  }
+  for (const res of clients) res.write(`data: ${JSON.stringify(event)}\n\n`)
 }
 
 function updateTask(taskId, patch) {
@@ -75,45 +119,104 @@ function normalizeProjects() {
   }))
 }
 
-function commandParts(command) {
-  if (process.platform === 'win32') {
-    return { command: 'cmd.exe', args: ['/d', '/s', '/c', command] }
+function streamLines(taskId, level, chunk) {
+  for (const line of chunk.toString().split(/\r?\n/).filter(Boolean)) {
+    sendEvent(taskId, { type: 'log', level, message: line })
   }
-
-  return { command: 'sh', args: ['-c', command] }
 }
 
-function runCommand(taskId, project, command) {
-  return new Promise((resolveRun) => {
-    const startedAt = Date.now()
-    const parts = commandParts(command)
-    const child = spawn(parts.command, parts.args, {
-      cwd: project.absolutePath,
-      env: process.env,
-      windowsHide: true,
-    })
+async function collectGit(project) {
+  const isRepo = await runShell('git rev-parse --is-inside-work-tree', { cwd: project.absolutePath })
+  if (!isRepo.ok) {
+    return { available: false, status: 'not a git repository', diff: [] }
+  }
 
-    child.stdout.on('data', (chunk) => {
-      for (const line of chunk.toString().split(/\r?\n/).filter(Boolean)) {
-        sendEvent(taskId, { type: 'log', level: 'stdout', message: line })
-      }
-    })
-
-    child.stderr.on('data', (chunk) => {
-      for (const line of chunk.toString().split(/\r?\n/).filter(Boolean)) {
-        sendEvent(taskId, { type: 'log', level: 'stderr', message: line })
-      }
-    })
-
-    child.on('error', (error) => {
-      sendEvent(taskId, { type: 'log', level: 'error', message: error.message })
-      resolveRun({ ok: false, code: -1, durationMs: Date.now() - startedAt })
-    })
-
-    child.on('close', (code) => {
-      resolveRun({ ok: code === 0, code, durationMs: Date.now() - startedAt })
-    })
+  const status = await runShell('git status --short', { cwd: project.absolutePath })
+  const diff = await runShell('git diff --no-ext-diff -- src runner omnifleet.config.json package.json README.md', {
+    cwd: project.absolutePath,
   })
+  const diffLines = diff.stdout.split(/\r?\n/).filter(Boolean)
+
+  return {
+    available: true,
+    status: status.stdout.trim() || 'clean',
+    diff: diffLines.length > 0 ? diffLines.slice(0, 240) : ['No working tree diff detected.'],
+  }
+}
+
+function createAdapters() {
+  return {
+    'build-check': {
+      label: 'Build Check',
+      detect: async () => true,
+      run: async ({ taskId, project }) => {
+        const command = project.defaultCommand
+        if (!project.allowedCommands.includes(command)) {
+          return { ok: false, command, durationMs: 0, summary: `Command is not allowed by policy: ${command}` }
+        }
+
+        sendEvent(taskId, { type: 'log', level: 'info', message: `safe command started: ${command}` })
+        const run = await runShell(command, {
+          cwd: project.absolutePath,
+          onStdout: (chunk) => streamLines(taskId, 'stdout', chunk),
+          onStderr: (chunk) => streamLines(taskId, 'stderr', chunk),
+        })
+
+        return {
+          ok: run.ok,
+          command,
+          durationMs: run.durationMs,
+          summary: run.ok
+            ? 'Build check completed successfully. Result is ready for approval.'
+            : `Build check failed with exit code ${run.code}. Review logs before continuing.`,
+        }
+      },
+    },
+    'mock-agent': {
+      label: 'Mock Agent',
+      detect: async () => true,
+      run: async ({ taskId }) => {
+        for (const message of ['mock adapter received task', 'mock adapter inspected policy', 'mock adapter produced review result']) {
+          sendEvent(taskId, { type: 'log', level: 'info', message })
+          await new Promise((resolveDelay) => setTimeout(resolveDelay, 220))
+        }
+        return { ok: true, command: 'mock-agent', durationMs: 660, summary: 'Mock adapter completed successfully.' }
+      },
+    },
+    opencode: {
+      label: 'opencode',
+      detect: async () => commandExists('opencode'),
+      run: async () => ({ ok: false, command: 'opencode', durationMs: 0, summary: 'opencode adapter is detected but execution wiring is not enabled yet.' }),
+    },
+    claude: {
+      label: 'Claude Code',
+      detect: async () => commandExists('claude'),
+      run: async () => ({ ok: false, command: 'claude', durationMs: 0, summary: 'Claude Code adapter is detected but execution wiring is not enabled yet.' }),
+    },
+    codex: {
+      label: 'Codex',
+      detect: async () => commandExists('codex'),
+      run: async () => ({ ok: false, command: 'codex', durationMs: 0, summary: 'Codex adapter is detected but execution wiring is not enabled yet.' }),
+    },
+  }
+}
+
+async function availableTools() {
+  const adapters = createAdapters()
+  const detected = []
+  for (const [name, adapter] of Object.entries(adapters)) {
+    if (await adapter.detect()) detected.push(name)
+  }
+  return detected
+}
+
+async function runnerPayload() {
+  return {
+    ...config.runner,
+    tools: await availableTools(),
+    status: 'online',
+    projects: config.projects.map((project) => project.name),
+  }
 }
 
 async function runTask(taskId) {
@@ -129,42 +232,27 @@ async function runTask(taskId) {
   sendEvent(taskId, { type: 'log', level: 'info', message: `tool selected: ${task.tool}` })
 
   if (!existsSync(project.absolutePath) || !statSync(project.absolutePath).isDirectory()) {
-    updateTask(taskId, {
-      status: 'failed',
-      result: { ok: false, summary: 'Project path does not exist or is not a directory.' },
-    })
+    updateTask(taskId, { status: 'failed', result: { ok: false, summary: 'Project path does not exist or is not a directory.' } })
     return
   }
 
-  const command = project.defaultCommand
-  if (!project.allowedCommands.includes(command)) {
-    updateTask(taskId, {
-      status: 'failed',
-      result: { ok: false, summary: `Command is not allowed by policy: ${command}` },
-    })
+  const adapters = createAdapters()
+  const adapter = adapters[task.tool]
+  if (!adapter || !(await adapter.detect())) {
+    updateTask(taskId, { status: 'failed', result: { ok: false, summary: `Tool is unavailable on this runner: ${task.tool}` } })
     return
   }
 
-  sendEvent(taskId, { type: 'log', level: 'info', message: `safe command started: ${command}` })
-  const run = await runCommand(taskId, project, command)
-
-  const summary = run.ok
-    ? 'Safe command completed successfully. Result is ready for approval.'
-    : `Safe command failed with exit code ${run.code}. Review logs before continuing.`
+  const run = await adapter.run({ taskId, task, project })
+  const git = await collectGit(project)
 
   updateTask(taskId, {
     status: 'review',
     result: {
-      ok: run.ok,
-      command,
-      durationMs: run.durationMs,
-      summary,
-      diff: [
-        '+ Real local runner accepted the task',
-        '+ SSE execution stream connected to the web client',
-        '+ Project command executed inside a whitelisted workspace',
-        '+ Human approval remains required before commit or push',
-      ],
+      ...run,
+      gitStatus: git.status,
+      gitAvailable: git.available,
+      diff: git.diff,
     },
   })
 }
@@ -199,17 +287,9 @@ const server = createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return json(res, 204, {})
 
   try {
-    if (url.pathname === '/api/health') {
-      return json(res, 200, { ok: true, runner: config.runner })
-    }
-
-    if (url.pathname === '/api/runners') {
-      return json(res, 200, [{ ...config.runner, status: 'online', projects: config.projects.map((project) => project.name) }])
-    }
-
-    if (url.pathname === '/api/projects') {
-      return json(res, 200, normalizeProjects())
-    }
+    if (url.pathname === '/api/health') return json(res, 200, { ok: true, runner: await runnerPayload() })
+    if (url.pathname === '/api/runners') return json(res, 200, [await runnerPayload()])
+    if (url.pathname === '/api/projects') return json(res, 200, normalizeProjects())
 
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
       const body = await readBody(req)
@@ -259,9 +339,7 @@ const server = createServer(async (req, res) => {
 
       if (!subscribers.has(taskId)) subscribers.set(taskId, new Set())
       subscribers.get(taskId).add(res)
-      for (const event of task.events) {
-        res.write(`data: ${JSON.stringify(event)}\n\n`)
-      }
+      for (const event of task.events) res.write(`data: ${JSON.stringify(event)}\n\n`)
       req.on('close', () => subscribers.get(taskId)?.delete(res))
       return
     }
