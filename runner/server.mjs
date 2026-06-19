@@ -1,14 +1,32 @@
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
-import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const config = JSON.parse(readFileSync(join(root, 'omnifleet.config.json'), 'utf8'))
 const port = Number(process.env.OMNIFLEET_PORT ?? 8787)
-const tasks = new Map()
+const stateDir = resolve(root, '.omnifleet')
+const taskStorePath = resolve(stateDir, 'tasks.json')
+const tasks = loadTasks()
 const subscribers = new Map()
+
+function loadTasks() {
+  try {
+    if (!existsSync(taskStorePath)) return new Map()
+    const items = JSON.parse(readFileSync(taskStorePath, 'utf8'))
+    return new Map(items.map((task) => [task.id, task]))
+  } catch {
+    return new Map()
+  }
+}
+
+function saveTasks() {
+  mkdirSync(stateDir, { recursive: true })
+  const items = Array.from(tasks.values()).slice(-100)
+  writeFileSync(taskStorePath, JSON.stringify(items, null, 2), 'utf8')
+}
 
 function json(res, status, data) {
   res.writeHead(status, {
@@ -103,6 +121,7 @@ function sendEvent(taskId, event) {
   if (!task) return
 
   task.events.push(event)
+  saveTasks()
   const clients = subscribers.get(taskId) ?? new Set()
   for (const res of clients) res.write(`data: ${JSON.stringify(event)}\n\n`)
 }
@@ -111,6 +130,7 @@ function updateTask(taskId, patch) {
   const task = tasks.get(taskId)
   if (!task) return
   Object.assign(task, patch)
+  saveTasks()
   sendEvent(taskId, { type: 'state', status: task.status, result: task.result ?? null })
 }
 
@@ -425,11 +445,20 @@ const server = createServer(async (req, res) => {
         tool: body.tool ?? config.runner.tools[0],
         status: 'queued',
         createdAt: new Date().toISOString(),
-        events: [],
+      events: [],
       }
       tasks.set(id, task)
+      saveTasks()
       setTimeout(() => runTask(id), 250)
       return json(res, 201, publicTask(task))
+    }
+
+    if (url.pathname === '/api/tasks' && req.method === 'GET') {
+      const items = Array.from(tasks.values())
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+        .slice(0, 50)
+        .map(publicTask)
+      return json(res, 200, items)
     }
 
     const taskMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)$/)

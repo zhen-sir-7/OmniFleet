@@ -59,6 +59,11 @@ button:disabled {
   opacity: 0.45;
 }
 
+.compact {
+  min-height: 38px;
+  padding: 0 14px;
+}
+
 .shell {
   width: min(1480px, calc(100% - 32px));
   margin: 0 auto;
@@ -195,6 +200,11 @@ h2 {
 .event-panel,
 .review-panel {
   min-height: 650px;
+  padding: 22px;
+}
+
+.history-panel {
+  margin-top: 24px;
   padding: 22px;
 }
 
@@ -520,6 +530,51 @@ select {
   color: var(--accent-dark);
 }
 
+.history-empty {
+  margin: 0;
+  border: 1px solid var(--line);
+  padding: 18px;
+  color: var(--muted);
+}
+
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.history-item {
+  display: flex;
+  min-height: 132px;
+  padding: 14px;
+  background: rgba(255, 252, 244, 0.72);
+  color: var(--ink);
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.history-item span,
+.history-item small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.history-item strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.96rem;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 @media (max-width: 1120px) {
   .hero,
   .grid-layout {
@@ -535,8 +590,13 @@ select {
 
   .task-panel,
   .event-panel,
-  .review-panel {
+  .review-panel,
+  .history-panel {
     min-height: auto;
+  }
+
+  .history-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -569,7 +629,8 @@ select {
   .selector-grid,
   .actions,
   .review-actions,
-  .policy-grid {
+  .policy-grid,
+  .history-grid {
     grid-template-columns: 1fr;
   }
 

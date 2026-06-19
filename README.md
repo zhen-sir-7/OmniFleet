@@ -547,6 +547,7 @@ Implemented:
 14. Approval state.
 15. Responsive desktop and mobile layout.
 16. Offline demo fallback when the runner is not available.
+17. Persistent local task history.
 
 Not implemented yet:
 
@@ -584,6 +585,7 @@ The runner exposes:
 GET  /api/health
 GET  /api/runners
 GET  /api/projects
+GET  /api/tasks
 POST /api/tasks
 GET  /api/tasks/:id
 GET  /api/tasks/:id/events
@@ -622,5 +624,13 @@ The approval flow is intentionally two-stage:
 2. `apply`: applies the approved worktree patch to the main workspace index, only if the main workspace is clean.
 
 This prevents a UI approval click from silently mutating the main project.
+
+Task history is stored locally at:
+
+```text
+.omnifleet/tasks.json
+```
+
+The runner keeps the latest 100 tasks, including task metadata, events, status, and result summaries. The web UI reads the latest 50 tasks from `GET /api/tasks` and displays them in the task history panel. This is intentionally local-only and ignored by git.
 
 This gives OmniFleet a real but safe first landing point: the user can dispatch a task to a local runner and observe an actual project command execute with streamed logs.

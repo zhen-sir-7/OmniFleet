@@ -43,6 +43,15 @@ type TaskEvent = {
   result?: TaskResult | null
 }
 
+type TaskRecord = {
+  id: string
+  description: string
+  tool: string
+  status: TaskState
+  createdAt: string
+  result: TaskResult | null
+}
+
 const apiBase = import.meta.env.DEV ? 'http://localhost:8787' : ''
 
 const fallbackRunners: Runner[] = [
@@ -89,6 +98,7 @@ export function App() {
   const [taskId, setTaskId] = useState<string | null>(null)
   const [runnerOnline, setRunnerOnline] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
+  const [history, setHistory] = useState<TaskRecord[]>([])
 
   useEffect(() => {
     async function loadRunner() {
@@ -107,6 +117,7 @@ export function App() {
         setSelectedProject(nextProjects[0]?.id ?? fallbackProjects[0].id)
         setSelectedTool(nextRunners[0]?.tools[0] ?? 'mock-agent')
         setRunnerOnline(true)
+        loadHistory()
       } catch {
         setRunnerOnline(false)
       }
@@ -119,6 +130,16 @@ export function App() {
   const currentProject = projects.find((project) => project.id === selectedProject) ?? projects[0]
   const logEvents = events.filter((event) => event.type === 'log')
   const diffLines = result?.diff ?? []
+
+  async function loadHistory() {
+    try {
+      const response = await fetch(`${apiBase}/api/tasks`)
+      if (!response.ok) return
+      setHistory((await response.json()) as TaskRecord[])
+    } catch {
+      setHistory([])
+    }
+  }
 
   async function startTask() {
     setState(runnerOnline ? 'queued' : 'running')
@@ -151,6 +172,7 @@ export function App() {
 
     const created = (await response.json()) as { id: string }
     setTaskId(created.id)
+    loadHistory()
     const source = new EventSource(`${apiBase}/api/tasks/${created.id}/events`)
 
     source.onmessage = (message) => {
@@ -161,6 +183,7 @@ export function App() {
         setState(event.status)
         if (event.result) setResult(event.result)
         if (event.status === 'review' || event.status === 'approved' || event.status === 'applied' || event.status === 'failed') {
+          loadHistory()
           source.close()
         }
       }
@@ -197,6 +220,7 @@ export function App() {
         const approved = (await response.json()) as { status: TaskState; result: TaskResult | null }
         setState(approved.status)
         if (approved.result) setResult(approved.result)
+        loadHistory()
         return
       }
     }
@@ -218,6 +242,7 @@ export function App() {
     const applied = (await response.json()) as { status: TaskState; result: TaskResult | null }
     setState(applied.status)
     if (applied.result) setResult(applied.result)
+    loadHistory()
   }
 
   function resetTask() {
@@ -420,6 +445,41 @@ export function App() {
             <p className="approval-note error-note">{applyError}</p>
           )}
         </aside>
+      </section>
+
+      <section className="panel history-panel">
+        <div className="section-heading split">
+          <div>
+            <p className="eyebrow">04 / memory</p>
+            <h2>Task history</h2>
+          </div>
+          <button className="secondary compact" onClick={loadHistory} disabled={!runnerOnline}>
+            Refresh
+          </button>
+        </div>
+
+        {history.length === 0 ? (
+          <p className="history-empty">No persisted tasks yet. Start the local runner and dispatch a task.</p>
+        ) : (
+          <div className="history-grid">
+            {history.map((item) => (
+              <button
+                className="history-item"
+                key={item.id}
+                onClick={() => {
+                  setTaskId(item.id)
+                  setState(item.status)
+                  setResult(item.result)
+                  setEvents([])
+                }}
+              >
+                <span>{item.status}</span>
+                <strong>{item.description || item.id}</strong>
+                <small>{item.tool} / {new Date(item.createdAt).toLocaleString()}</small>
+              </button>
+            ))}
+          </div>
+        )}
       </section>
     </main>
   )
