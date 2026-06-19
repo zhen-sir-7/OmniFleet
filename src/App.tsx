@@ -229,6 +229,22 @@ export function App() {
     }
   }
 
+  async function unregisterRunner() {
+    if (!useRelayProxy || !selectedRunner) return
+
+    try {
+      const response = await fetch(`${relayBase}/api/runners/${selectedRunner}`, {
+        method: 'DELETE',
+        headers: relayToken ? { 'X-OmniFleet-Relay-Token': relayToken } : {},
+      })
+      if (!response.ok) throw new Error('failed to unregister runner')
+      setRelayStatus(`unregistered runner ${selectedRunner}`)
+      loadRelayRunners()
+    } catch (error) {
+      setRelayStatus(error instanceof Error ? error.message : 'failed to unregister runner')
+    }
+  }
+
   async function loadHistory() {
     try {
       const response = await apiFetch('/api/tasks')
@@ -526,6 +542,11 @@ export function App() {
             </p>
             {currentRunner.endpoint && <p>{currentRunner.endpoint}</p>}
             <p>{currentProject.absolutePath}</p>
+            {useRelayProxy && (
+              <button className="secondary compact route-action" onClick={unregisterRunner} disabled={state === 'running' || state === 'queued'}>
+                Unregister runner
+              </button>
+            )}
           </div>
 
           <div className="actions">

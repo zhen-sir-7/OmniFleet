@@ -348,6 +348,11 @@ select {
   font-size: 0.86rem;
 }
 
+.route-action {
+  width: 100%;
+  margin-top: 14px;
+}
+
 .route-dot {
   width: 12px;
   height: 12px;
