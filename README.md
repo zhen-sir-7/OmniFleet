@@ -538,6 +538,12 @@ Build for production:
 npm run build
 ```
 
+Run the standard local verification command:
+
+```bash
+npm run check
+```
+
 Preview the production build:
 
 ```bash
