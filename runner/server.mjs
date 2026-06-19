@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
-import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs'
+import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -52,6 +52,16 @@ function runShell(command, options = {}) {
       env: process.env,
       windowsHide: true,
     })
+    let settled = false
+    const timeout = options.timeoutMs
+      ? setTimeout(() => {
+          if (settled) return
+          settled = true
+          child.kill('SIGTERM')
+          stderr.push(`Command timed out after ${options.timeoutMs}ms`)
+          resolveRun({ ok: false, code: -2, stdout: stdout.join(''), stderr: stderr.join(''), durationMs: Date.now() - startedAt })
+        }, options.timeoutMs)
+      : null
 
     child.stdout.on('data', (chunk) => {
       const text = chunk.toString()
@@ -66,11 +76,17 @@ function runShell(command, options = {}) {
     })
 
     child.on('error', (error) => {
+      if (settled) return
+      settled = true
+      if (timeout) clearTimeout(timeout)
       stderr.push(error.message)
       resolveRun({ ok: false, code: -1, stdout: stdout.join(''), stderr: stderr.join(''), durationMs: Date.now() - startedAt })
     })
 
     child.on('close', (code) => {
+      if (settled) return
+      settled = true
+      if (timeout) clearTimeout(timeout)
       resolveRun({ ok: code === 0, code, stdout: stdout.join(''), stderr: stderr.join(''), durationMs: Date.now() - startedAt })
     })
   })
@@ -144,6 +160,37 @@ async function collectGit(project) {
   }
 }
 
+async function prepareTaskWorkspace(taskId, project) {
+  const isRepo = await runShell('git rev-parse --is-inside-work-tree', { cwd: project.absolutePath })
+  if (!isRepo.ok) return { ok: false, path: project.absolutePath, summary: 'Project is not a git repository; refusing agent execution.' }
+
+  const worktreeRoot = resolve(root, config.security?.worktreeRoot ?? '.omnifleet/worktrees')
+  const taskPath = resolve(worktreeRoot, taskId)
+  mkdirSync(worktreeRoot, { recursive: true })
+  if (existsSync(taskPath)) rmSync(taskPath, { recursive: true, force: true })
+
+  const branch = `omnifleet/${taskId}`
+  const result = await runShell(`git worktree add -B ${branch} "${taskPath}" HEAD`, { cwd: project.absolutePath })
+  if (!result.ok) {
+    return { ok: false, path: project.absolutePath, summary: result.stderr || result.stdout || 'Failed to create task worktree.' }
+  }
+
+  return { ok: true, path: taskPath, branch, summary: `Created isolated worktree: ${taskPath}` }
+}
+
+function safeAgentPrompt(task, project) {
+  return [
+    'You are running inside an OmniFleet isolated task worktree.',
+    'Follow these safety rules strictly:',
+    '- Do not commit, push, publish, deploy, delete broad paths, or read secret files.',
+    '- Do not access .env, .ssh, .aws, private keys, credentials, or token files.',
+    '- Keep changes minimal and focused on the user request.',
+    '- If a command looks destructive or needs secrets, stop and explain instead.',
+    `Project: ${project.name}`,
+    `User request: ${task.description}`,
+  ].join('\n')
+}
+
 function createAdapters() {
   return {
     'build-check': {
@@ -186,7 +233,37 @@ function createAdapters() {
     opencode: {
       label: 'opencode',
       detect: async () => commandExists('opencode'),
-      run: async () => ({ ok: false, command: 'opencode', durationMs: 0, summary: 'opencode adapter is detected but execution wiring is not enabled yet.' }),
+      run: async ({ taskId, task, project }) => {
+        const workspace = await prepareTaskWorkspace(taskId, project)
+        if (!workspace.ok) return { ok: false, command: 'opencode', durationMs: 0, summary: workspace.summary }
+
+        sendEvent(taskId, { type: 'log', level: 'info', message: workspace.summary })
+        const prompt = safeAgentPrompt(task, project).replace(/"/g, '\\"')
+        const format = config.adapters?.opencode?.format === 'json' ? '--format json' : ''
+        const command = `opencode run ${format} --dir "${workspace.path}" "${prompt}"`
+        sendEvent(taskId, { type: 'log', level: 'info', message: 'opencode started inside isolated worktree' })
+
+        const run = await runShell(command, {
+          cwd: workspace.path,
+          timeoutMs: config.security?.taskTimeoutMs ?? 120000,
+          onStdout: (chunk) => streamLines(taskId, 'stdout', chunk),
+          onStderr: (chunk) => streamLines(taskId, 'stderr', chunk),
+        })
+
+        const git = await collectGit({ ...project, absolutePath: workspace.path })
+        return {
+          ok: run.ok,
+          command: 'opencode run',
+          durationMs: run.durationMs,
+          worktreePath: workspace.path,
+          worktreeBranch: workspace.branch,
+          agentGitStatus: git.status,
+          agentDiff: git.diff,
+          summary: run.ok
+            ? 'opencode completed inside an isolated worktree. Review the agent diff before applying anything to the main workspace.'
+            : `opencode exited with code ${run.code}. Review logs and isolated worktree state before continuing.`,
+        }
+      },
     },
     claude: {
       label: 'Claude Code',
@@ -245,6 +322,7 @@ async function runTask(taskId) {
 
   const run = await adapter.run({ taskId, task, project })
   const git = await collectGit(project)
+  const resultDiff = Array.isArray(run.agentDiff) ? run.agentDiff : git.diff
 
   updateTask(taskId, {
     status: 'review',
@@ -252,7 +330,7 @@ async function runTask(taskId) {
       ...run,
       gitStatus: git.status,
       gitAvailable: git.available,
-      diff: git.diff,
+      diff: resultDiff,
     },
   })
 }

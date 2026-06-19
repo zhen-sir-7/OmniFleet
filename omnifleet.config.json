@@ -17,6 +17,14 @@
   ],
   "security": {
     "denyFiles": [".env", ".env.*", "*.pem", "*.key", "id_rsa", "id_ed25519", ".ssh", ".aws", ".npmrc", "credentials"],
-    "denyCommands": ["git push", "git reset --hard", "rm -rf", "del /s", "curl | sh", "npm publish", "pnpm publish", "kubectl apply", "terraform apply"]
+    "denyCommands": ["git push", "git reset --hard", "rm -rf", "del /s", "curl | sh", "npm publish", "pnpm publish", "kubectl apply", "terraform apply"],
+    "taskTimeoutMs": 120000,
+    "worktreeRoot": ".omnifleet/worktrees"
+  },
+  "adapters": {
+    "opencode": {
+      "enabled": true,
+      "format": "json"
+    }
   }
 }

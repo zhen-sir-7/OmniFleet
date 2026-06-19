@@ -527,7 +527,7 @@ npm run preview
 
 ## First Version Scope
 
-The current app includes a real local runner, but remains intentionally narrow. It proves task dispatch, streamed execution, project-level command policy, adapter-based tool detection, git result collection, and approval flow before introducing distributed relay infrastructure and full AI tool execution.
+The current app includes a real local runner, but remains intentionally narrow. It proves task dispatch, streamed execution, project-level command policy, adapter-based tool detection, isolated opencode execution, git result collection, and approval flow before introducing distributed relay infrastructure and richer AI tool execution.
 
 Implemented:
 
@@ -540,21 +540,23 @@ Implemented:
 7. Whitelisted project command execution.
 8. Adapter registry for `build-check`, `mock-agent`, `opencode`, `claude`, and `codex`.
 9. Tool availability detection from the runner environment.
-10. Real git status and git diff collection.
-11. Permission policy panel.
-12. Result review card.
-13. Approval state.
-14. Responsive desktop and mobile layout.
-15. Offline demo fallback when the runner is not available.
+10. Isolated `opencode run` execution inside per-task git worktrees.
+11. Real git status and git diff collection.
+12. Permission policy panel.
+13. Result review card.
+14. Approval state.
+15. Responsive desktop and mobile layout.
+16. Offline demo fallback when the runner is not available.
 
 Not implemented yet:
 
 1. Real relay server.
 2. Multi-device registration.
-3. Full opencode / Claude Code / Codex task execution wiring.
+3. Claude Code / Codex task execution wiring.
 4. Command-by-command approval interception.
-5. Authentication and device identity.
-6. End-to-end encrypted remote dispatch.
+5. Applying approved worktree changes back to the main workspace.
+6. Authentication and device identity.
+7. End-to-end encrypted remote dispatch.
 
 ## Local Runner
 
@@ -592,14 +594,15 @@ The execution model is deliberately conservative:
 
 1. The runner only executes commands listed in the project's `allowedCommands`.
 2. The default task command is `npm run build`.
-3. Push, publish, destructive shell, deployment, and secret-reading operations are not implemented.
-4. Approval only approves the task result; it does not commit or push code.
+3. `opencode` runs inside a per-task git worktree under `.omnifleet/worktrees`.
+4. Push, publish, destructive shell, deployment, and secret-reading operations are not implemented.
+5. Approval only approves the task result; it does not commit, push, or apply worktree changes to the main workspace.
 
 The runner now has a minimal adapter registry:
 
 1. `build-check`: executes the project's whitelisted build command.
 2. `mock-agent`: simulates an agent for UI and flow testing.
-3. `opencode`: detected from `PATH`, execution wiring pending.
+3. `opencode`: detected from `PATH`, executed with `opencode run --dir <task-worktree>`.
 4. `claude`: detected from `PATH`, execution wiring pending.
 5. `codex`: detected from `PATH`, execution wiring pending.
 
@@ -608,5 +611,6 @@ Each task result includes git metadata when available:
 1. Whether the project is inside a git worktree.
 2. `git status --short` output.
 3. A bounded `git diff --no-ext-diff` result for review.
+4. Worktree path, branch, and agent-side git status when using `opencode`.
 
 This gives OmniFleet a real but safe first landing point: the user can dispatch a task to a local runner and observe an actual project command execute with streamed logs.

@@ -10,3 +10,4 @@ coverage/
 .vite/
 *.tsbuildinfo
 node_modules/.tmp/
+.omnifleet/

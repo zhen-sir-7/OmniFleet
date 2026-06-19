@@ -28,6 +28,9 @@ type TaskResult = {
   diff?: string[]
   gitStatus?: string
   gitAvailable?: boolean
+  worktreePath?: string
+  worktreeBranch?: string
+  agentGitStatus?: string
 }
 
 type TaskEvent = {
@@ -360,6 +363,9 @@ export function App() {
                   {typeof result.gitAvailable === 'boolean' && (
                     <p>git: {result.gitAvailable ? result.gitStatus : 'not available'}</p>
                   )}
+                  {result.worktreeBranch && <p>worktree branch: {result.worktreeBranch}</p>}
+                  {result.worktreePath && <p>worktree path: {result.worktreePath}</p>}
+                  {result.agentGitStatus && <p>agent status: {result.agentGitStatus}</p>}
                   {diffLines.map((line) => <p key={line}>{line}</p>)}
                 </>
               ) : (
