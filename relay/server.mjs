@@ -204,6 +204,32 @@ function runnerStatus(runner) {
   return seenRecently ? 'stale' : 'offline'
 }
 
+function normalizeName(value) {
+  return String(value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function routeRunner(body) {
+  const candidates = Array.from(runners.values())
+    .map((runner) => ({ ...runner, status: runnerStatus(runner) }))
+    .filter((runner) => runner.status === 'online')
+
+  const scored = candidates
+    .map((runner) => {
+      const tools = runner.tools ?? []
+      const projects = runner.projects ?? []
+      const toolMatch = body.tool ? tools.includes(body.tool) : true
+      const projectMatch = body.projectId
+        ? projects.some((project) => normalizeName(project) === normalizeName(body.projectId))
+        : true
+      const score = (toolMatch ? 10 : 0) + (projectMatch ? 10 : 0) + (runner.lastProbeOk ? 2 : 0)
+      return { runner, score, toolMatch, projectMatch }
+    })
+    .filter((item) => item.toolMatch && item.projectMatch)
+    .sort((a, b) => b.score - a.score)
+
+  return scored[0]?.runner ?? null
+}
+
 function startProbeLoop() {
   const run = () => {
     for (const runner of runners.values()) probeRunner(runner)
@@ -332,6 +358,16 @@ const server = createServer(async (req, res) => {
       const runner = findRunner(body.runnerId)
       if (!runner) return json(res, 404, { error: 'Runner not found' })
       const proxied = await proxyJson(req, res, runner, '/api/tasks', { method: 'POST', body })
+      if (proxied.ok && proxied.data?.id) rememberTask(runner, proxied.data)
+      return
+    }
+
+    if (url.pathname === '/api/tasks/route' && req.method === 'POST') {
+      const body = await readBody(req)
+      const runner = routeRunner(body)
+      if (!runner) return json(res, 409, { error: 'No online runner matches the requested project and tool.' })
+      const routedBody = { ...body, runnerId: runner.id }
+      const proxied = await proxyJson(req, res, runner, '/api/tasks', { method: 'POST', body: routedBody })
       if (proxied.ok && proxied.data?.id) rememberTask(runner, proxied.data)
       return
     }

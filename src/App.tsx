@@ -109,6 +109,7 @@ export function App() {
   const [relayToken, setRelayToken] = useState(() => localStorage.getItem('omnifleet-relay-token') ?? '')
   const [relayStatus, setRelayStatus] = useState<string | null>(null)
   const [useRelayProxy, setUseRelayProxy] = useState(false)
+  const [autoRoute, setAutoRoute] = useState(false)
 
   useEffect(() => {
     async function loadRunner() {
@@ -145,8 +146,8 @@ export function App() {
   const logEvents = events.filter((event) => event.type === 'log')
   const diffLines = result?.diff ?? []
 
-  function taskPath(path: 'events' | 'approve' | 'apply', id: string) {
-    if (useRelayProxy) return `/api/tasks/${selectedRunner}/${id}/${path}`
+  function taskPath(path: 'events' | 'approve' | 'apply', id: string, runnerId = selectedRunner) {
+    if (useRelayProxy) return `/api/tasks/${runnerId}/${id}/${path}`
     return `/api/tasks/${id}/${path}`
   }
 
@@ -245,7 +246,7 @@ export function App() {
       return
     }
 
-    const response = await apiFetch('/api/tasks', {
+    const response = await apiFetch(useRelayProxy && autoRoute ? '/api/tasks/route' : '/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -262,13 +263,15 @@ export function App() {
       return
     }
 
-    const created = (await response.json()) as { id: string }
+    const created = (await response.json()) as { id: string; runnerId?: string }
+    const eventRunnerId = created.runnerId ?? selectedRunner
+    if (created.runnerId) setSelectedRunner(created.runnerId)
     setTaskId(created.id)
     loadHistory()
     const eventBase = useRelayProxy ? relayBase : runnerBase
     const eventParams = new URLSearchParams({ token })
     if (useRelayProxy && relayToken) eventParams.set('relayToken', relayToken)
-    const source = new EventSource(`${eventBase}${taskPath('events', created.id)}?${eventParams.toString()}`)
+    const source = new EventSource(`${eventBase}${taskPath('events', created.id, eventRunnerId)}?${eventParams.toString()}`)
 
     source.onmessage = (message) => {
       const event = JSON.parse(message.data) as TaskEvent
@@ -433,6 +436,16 @@ export function App() {
               onChange={(event) => setUseRelayProxy(event.target.checked)}
             />
             <span>Route task API through relay proxy</span>
+          </label>
+
+          <label className="proxy-toggle">
+            <input
+              type="checkbox"
+              checked={autoRoute}
+              disabled={!useRelayProxy}
+              onChange={(event) => setAutoRoute(event.target.checked)}
+            />
+            <span>Auto route to an online matching runner</span>
           </label>
 
           <label className="field-label" htmlFor="task-input">

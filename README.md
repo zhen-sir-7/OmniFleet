@@ -700,6 +700,7 @@ GET  /api/runners
 POST /api/runners/register
 GET  /api/tasks
 POST /api/tasks
+POST /api/tasks/route
 GET  /api/tasks/:runnerId
 GET  /api/tasks/:runnerId/:taskId
 GET  /api/tasks/:runnerId/:taskId/events
@@ -761,6 +762,8 @@ The web UI can load runners from the relay:
 The relay can now proxy task creation, task history, event streams, approve, and apply calls to the selected runner. The relay does not store runner tokens; the web UI forwards the runner token to the relay, and the relay passes it to the runner for authorization. Task execution still happens on the runner device.
 
 When the relay proxies task creation, approve, or apply calls, it stores a task metadata record with the owning runner. While proxying the runner event stream, the relay also parses `state` events and updates the relay-level task record. `GET /api/tasks` returns the latest relay-level task records across all runners. This gives the UI a unified history surface even when tasks belong to different devices.
+
+The relay can also route a task automatically with `POST /api/tasks/route`. It only considers `online` runners and requires matching project and tool capabilities. In the UI, enable `Auto route to an online matching runner` to use this path.
 
 This is the first usable routing model:
 
