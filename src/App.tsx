@@ -106,6 +106,7 @@ export function App() {
   const [token, setToken] = useState(() => localStorage.getItem('omnifleet-token') ?? '')
   const [authError, setAuthError] = useState<string | null>(null)
   const [relayUrl, setRelayUrl] = useState(() => localStorage.getItem('omnifleet-relay-url') ?? defaultRelayUrl)
+  const [relayToken, setRelayToken] = useState(() => localStorage.getItem('omnifleet-relay-token') ?? '')
   const [relayStatus, setRelayStatus] = useState<string | null>(null)
   const [useRelayProxy, setUseRelayProxy] = useState(false)
 
@@ -155,6 +156,7 @@ export function App() {
       ...options,
       headers: {
         ...(options.headers ?? {}),
+        ...(useRelayProxy && relayToken ? { 'X-OmniFleet-Relay-Token': relayToken } : {}),
         ...(token ? { 'X-OmniFleet-Token': token } : {}),
       },
     }).then((response) => {
@@ -166,6 +168,11 @@ export function App() {
   function saveToken() {
     localStorage.setItem('omnifleet-token', token)
     setAuthError(null)
+  }
+
+  function saveRelayToken() {
+    localStorage.setItem('omnifleet-relay-token', relayToken)
+    setRelayStatus(null)
   }
 
   async function loadProjectsForRunner(runner: Runner) {
@@ -195,7 +202,9 @@ export function App() {
   async function loadRelayRunners() {
     try {
       localStorage.setItem('omnifleet-relay-url', relayUrl)
-      const response = await fetch(`${relayBase}/api/runners`)
+      const response = await fetch(`${relayBase}/api/runners`, {
+        headers: relayToken ? { 'X-OmniFleet-Relay-Token': relayToken } : {},
+      })
       if (!response.ok) throw new Error('relay unavailable')
       const relayRunners = (await response.json()) as Runner[]
       if (relayRunners.length === 0) {
@@ -257,7 +266,9 @@ export function App() {
     setTaskId(created.id)
     loadHistory()
     const eventBase = useRelayProxy ? relayBase : runnerBase
-    const source = new EventSource(`${eventBase}${taskPath('events', created.id)}?token=${encodeURIComponent(token)}`)
+    const eventParams = new URLSearchParams({ token })
+    if (useRelayProxy && relayToken) eventParams.set('relayToken', relayToken)
+    const source = new EventSource(`${eventBase}${taskPath('events', created.id)}?${eventParams.toString()}`)
 
     source.onmessage = (message) => {
       const event = JSON.parse(message.data) as TaskEvent
@@ -400,6 +411,20 @@ export function App() {
             <button className="secondary compact" onClick={loadRelayRunners}>Load</button>
           </div>
           {relayStatus && <p className="token-hint neutral-hint">{relayStatus}</p>}
+
+          <label className="field-label" htmlFor="relay-token-input">
+            Relay token
+          </label>
+          <div className="token-row">
+            <input
+              id="relay-token-input"
+              type="password"
+              value={relayToken}
+              placeholder="paste .omnifleet/relay.json token"
+              onChange={(event) => setRelayToken(event.target.value)}
+            />
+            <button className="secondary compact" onClick={saveRelayToken}>Save</button>
+          </div>
 
           <label className="proxy-toggle">
             <input

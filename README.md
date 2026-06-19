@@ -505,16 +505,17 @@ Start the local relay:
 npm run relay
 ```
 
-Register a runner with the relay by starting the runner with `OMNIFLEET_RELAY_URL`:
+On first start, the relay creates `.omnifleet/relay.json`. Register a runner with the relay by starting the runner with `OMNIFLEET_RELAY_URL` and `OMNIFLEET_RELAY_TOKEN`:
 
 ```bash
-OMNIFLEET_RELAY_URL=http://localhost:8790 npm run runner
+OMNIFLEET_RELAY_URL=http://localhost:8790 OMNIFLEET_RELAY_TOKEN=<relay-token> npm run runner
 ```
 
 On Windows PowerShell:
 
 ```powershell
-$env:OMNIFLEET_RELAY_URL = "http://localhost:8790"; npm run runner
+$relay = Get-Content .omnifleet/relay.json | ConvertFrom-Json
+$env:OMNIFLEET_RELAY_URL = "http://localhost:8790"; $env:OMNIFLEET_RELAY_TOKEN = $relay.token; npm run runner
 ```
 
 Then open the Vite URL shown in the terminal. The frontend will connect to `http://localhost:8787` during development.
@@ -718,17 +719,30 @@ Proxied task records are stored locally at:
 .omnifleet/relay-tasks.json
 ```
 
-When a runner starts with `OMNIFLEET_RELAY_URL`, it self-registers with the relay and refreshes its registration every 30 seconds. The relay marks runners as `online` if they were seen in the last 45 seconds, otherwise `stale`.
+Relay identity and token are stored locally at:
+
+```text
+.omnifleet/relay.json
+```
+
+All relay API endpoints except `GET /api/health` require:
+
+```text
+X-OmniFleet-Relay-Token: <relay-token>
+```
+
+When a runner starts with `OMNIFLEET_RELAY_URL` and `OMNIFLEET_RELAY_TOKEN`, it self-registers with the relay and refreshes its registration every 30 seconds. The relay marks runners as `online` if they were seen in the last 45 seconds, otherwise `stale`.
 
 The web UI can load runners from the relay:
 
 1. Start the relay with `npm run relay`.
-2. Start a runner with `OMNIFLEET_RELAY_URL`.
+2. Start a runner with `OMNIFLEET_RELAY_URL` and `OMNIFLEET_RELAY_TOKEN`.
 3. Paste the runner token from `.omnifleet/device.json` into the UI.
-4. Keep the relay URL as `http://localhost:8790` or enter another relay endpoint.
-5. Click `Load` beside the relay URL.
-6. Select a discovered runner from the `Runner` dropdown.
-7. Keep `Route task API through relay proxy` enabled to send task API calls through the relay.
+4. Paste the relay token from `.omnifleet/relay.json` into the UI.
+5. Keep the relay URL as `http://localhost:8790` or enter another relay endpoint.
+6. Click `Load` beside the relay URL.
+7. Select a discovered runner from the `Runner` dropdown.
+8. Keep `Route task API through relay proxy` enabled to send task API calls through the relay.
 
 The relay can now proxy task creation, task history, event streams, approve, and apply calls to the selected runner. The relay does not store runner tokens; the web UI forwards the runner token to the relay, and the relay passes it to the runner for authorization. Task execution still happens on the runner device.
 

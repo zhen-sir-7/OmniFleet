@@ -1,15 +1,36 @@
 import { createServer } from 'node:http'
+import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const stateDir = resolve(root, '.omnifleet')
+const relayStorePath = resolve(stateDir, 'relay.json')
 const registryPath = resolve(stateDir, 'relay-runners.json')
 const taskStorePath = resolve(stateDir, 'relay-tasks.json')
 const port = Number(process.env.OMNIFLEET_RELAY_PORT ?? 8790)
+const relay = loadRelay()
 const runners = loadRegistry()
 const tasks = loadTasks()
+
+function loadRelay() {
+  mkdirSync(stateDir, { recursive: true })
+  try {
+    if (existsSync(relayStorePath)) return JSON.parse(readFileSync(relayStorePath, 'utf8'))
+  } catch {
+    // Regenerate below if unreadable.
+  }
+
+  const nextRelay = {
+    id: 'local-relay-01',
+    name: 'Local OmniFleet Relay',
+    token: randomBytes(24).toString('hex'),
+    createdAt: new Date().toISOString(),
+  }
+  writeFileSync(relayStorePath, JSON.stringify(nextRelay, null, 2), 'utf8')
+  return nextRelay
+}
 
 function loadRegistry() {
   try {
@@ -49,6 +70,16 @@ function json(res, status, data) {
     'Access-Control-Allow-Headers': 'Content-Type',
   })
   res.end(JSON.stringify(data))
+}
+
+function unauthorized(res) {
+  return json(res, 401, { error: 'Missing or invalid X-OmniFleet-Relay-Token header.' })
+}
+
+function isRelayAuthorized(req, url) {
+  const token = req.headers['x-omnifleet-relay-token']
+  const queryToken = url.searchParams.get('relayToken')
+  return (typeof token === 'string' && token === relay.token) || queryToken === relay.token
 }
 
 function readBody(req) {
@@ -178,7 +209,8 @@ const server = createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return json(res, 204, {})
 
   try {
-    if (url.pathname === '/api/health') return json(res, 200, { ok: true, role: 'relay' })
+    if (url.pathname === '/api/health') return json(res, 200, { ok: true, role: 'relay', tokenRequired: true, relay: { id: relay.id, name: relay.name } })
+    if (url.pathname.startsWith('/api/') && !isRelayAuthorized(req, url)) return unauthorized(res)
 
     if (url.pathname === '/api/runners' && req.method === 'GET') {
       const now = Date.now()

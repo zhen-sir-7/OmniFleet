@@ -401,7 +401,10 @@ async function registerWithRelay() {
     const payload = await runnerPayload()
     await fetch(`${relayUrl.replace(/\/$/, '')}/api/runners/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.OMNIFLEET_RELAY_TOKEN ? { 'X-OmniFleet-Relay-Token': process.env.OMNIFLEET_RELAY_TOKEN } : {}),
+      },
       body: JSON.stringify({
         id: payload.deviceId,
         name: payload.name,
