@@ -109,6 +109,9 @@ function publicRunner(runner) {
     capabilities: runner.capabilities ?? [],
     registeredAt: runner.registeredAt,
     lastSeenAt: runner.lastSeenAt,
+    lastProbeAt: runner.lastProbeAt ?? null,
+    lastProbeOk: runner.lastProbeOk ?? false,
+    lastProbeError: runner.lastProbeError ?? null,
   }
 }
 
@@ -174,6 +177,39 @@ function findRunner(id) {
   const runner = runners.get(id)
   if (!runner) return null
   return runner
+}
+
+async function probeRunner(runner) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 2500)
+
+  try {
+    const response = await fetch(`${runner.endpoint}/api/health`, { signal: controller.signal })
+    runner.lastProbeAt = new Date().toISOString()
+    runner.lastProbeOk = response.ok
+    runner.lastProbeError = response.ok ? null : `HTTP ${response.status}`
+  } catch (error) {
+    runner.lastProbeAt = new Date().toISOString()
+    runner.lastProbeOk = false
+    runner.lastProbeError = error instanceof Error ? error.message : 'probe failed'
+  } finally {
+    clearTimeout(timeout)
+    saveRegistry()
+  }
+}
+
+function runnerStatus(runner) {
+  const seenRecently = Date.now() - Date.parse(runner.lastSeenAt) < 45000
+  if (runner.lastProbeOk) return 'online'
+  return seenRecently ? 'stale' : 'offline'
+}
+
+function startProbeLoop() {
+  const run = () => {
+    for (const runner of runners.values()) probeRunner(runner)
+  }
+  run()
+  setInterval(run, Number(process.env.OMNIFLEET_RELAY_PROBE_INTERVAL_MS ?? 15000))
 }
 
 async function proxyJson(req, res, runner, path, options = {}) {
@@ -249,11 +285,10 @@ const server = createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/') && !isRelayAuthorized(req, url)) return unauthorized(res)
 
     if (url.pathname === '/api/runners' && req.method === 'GET') {
-      const now = Date.now()
       const items = Array.from(runners.values())
         .map((runner) => ({
           ...runner,
-          status: now - Date.parse(runner.lastSeenAt) < 45000 ? 'online' : 'stale',
+          status: runnerStatus(runner),
         }))
         .map(publicRunner)
       return json(res, 200, items)
@@ -274,9 +309,13 @@ const server = createServer(async (req, res) => {
         capabilities: Array.isArray(body.capabilities) ? body.capabilities : [],
         registeredAt: previous?.registeredAt ?? new Date().toISOString(),
         lastSeenAt: new Date().toISOString(),
+        lastProbeAt: previous?.lastProbeAt ?? null,
+        lastProbeOk: previous?.lastProbeOk ?? false,
+        lastProbeError: previous?.lastProbeError ?? null,
       }
       runners.set(runner.id, runner)
       saveRegistry()
+      probeRunner(runner)
       return json(res, 200, publicRunner(runner))
     }
 
@@ -344,4 +383,5 @@ const server = createServer(async (req, res) => {
 
 server.listen(port, () => {
   console.log(`OmniFleet relay listening on http://localhost:${port}`)
+  startProbeLoop()
 })

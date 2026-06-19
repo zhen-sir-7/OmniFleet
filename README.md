@@ -731,7 +731,21 @@ All relay API endpoints except `GET /api/health` require:
 X-OmniFleet-Relay-Token: <relay-token>
 ```
 
-When a runner starts with `OMNIFLEET_RELAY_URL` and `OMNIFLEET_RELAY_TOKEN`, it self-registers with the relay and refreshes its registration every 30 seconds. The relay marks runners as `online` if they were seen in the last 45 seconds, otherwise `stale`.
+When a runner starts with `OMNIFLEET_RELAY_URL` and `OMNIFLEET_RELAY_TOKEN`, it self-registers with the relay and refreshes its registration every 30 seconds. The relay also probes each registered runner's `GET /api/health` endpoint every 15 seconds by default.
+
+Runner status semantics:
+
+1. `online`: the latest health probe succeeded.
+2. `stale`: the latest probe failed, but the runner refreshed registration in the last 45 seconds.
+3. `offline`: the latest probe failed and the runner has not refreshed registration recently.
+
+The probe interval can be changed with:
+
+```text
+OMNIFLEET_RELAY_PROBE_INTERVAL_MS=15000
+```
+
+Relay runner records include `lastProbeAt`, `lastProbeOk`, and `lastProbeError` for debugging reachability.
 
 The web UI can load runners from the relay:
 
