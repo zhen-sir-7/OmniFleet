@@ -251,6 +251,12 @@ export function App() {
     if (item.status === 'queued' || item.status === 'running') counts[id].active += 1
     return counts
   }, {})
+  const fleetRecentTasks = history.reduce<Record<string, { status: string; description: string }[]>>((recent, item) => {
+    const id = item.runnerId ?? 'unknown'
+    if (!recent[id]) recent[id] = []
+    if (recent[id].length < 3) recent[id].push({ status: item.status, description: item.description })
+    return recent
+  }, {})
   const historyCounts = history.reduce<Record<string, number>>((counts, item) => {
     counts[item.status] = (counts[item.status] ?? 0) + 1
     counts.total = (counts.total ?? 0) + 1
@@ -1505,6 +1511,16 @@ export function App() {
                   <p className="fleet-caps">
                     queue: {runner.queueLength} · running: {runner.runningCount}
                   </p>
+                )}
+                {fleetRecentTasks[runner.id]?.length > 0 && (
+                  <div className="fleet-recent">
+                    {fleetRecentTasks[runner.id].map((task, i) => (
+                      <p key={i}>
+                        <span className={`fleet-status-dot ${task.status}`} />
+                        {task.description.slice(0, 40)}{task.description.length > 40 ? '…' : ''}
+                      </p>
+                    ))}
+                  </div>
                 )}
               </button>
             ))}

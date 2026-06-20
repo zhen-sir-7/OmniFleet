@@ -828,6 +828,36 @@ select {
   font-weight: 800;
 }
 
+.fleet-recent {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--soft-line);
+}
+
+.fleet-recent p {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 3px !important;
+  font-size: 0.62rem !important;
+  color: var(--muted) !important;
+}
+
+.fleet-status-dot {
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.fleet-status-dot.review { background: var(--green); }
+.fleet-status-dot.approved { background: var(--ink); }
+.fleet-status-dot.applied { background: var(--green); }
+.fleet-status-dot.failed { background: var(--accent-dark); }
+.fleet-status-dot.cancelled { background: var(--muted); }
+.fleet-status-dot.queued { background: var(--accent); }
+.fleet-status-dot.running { background: var(--accent); }
+
 .history-summary {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
