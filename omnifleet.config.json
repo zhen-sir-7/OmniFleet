@@ -4,7 +4,7 @@
     "name": "Local OmniFleet Runner",
     "os": "windows",
     "tools": ["build-check", "mock-agent"],
-    "capabilities": ["read_project", "run_safe_command", "stream_logs", "collect_result"]
+    "capabilities": ["read_project", "run_safe_command", "stream_logs", "collect_result", "hasGit", "hasNode"]
   },
   "projects": [
     {

@@ -232,22 +232,25 @@ function routeRunner(body) {
       const projectMatch = body.projectId
         ? projects.some((project) => normalizeName(project) === normalizeName(body.projectId))
         : true
+      const required = Array.isArray(body.requiredCapabilities) ? body.requiredCapabilities : []
+      const capabilityMatch = required.length === 0 || required.every((cap) => (runner.capabilities ?? []).some((runnerCap) => normalizeName(String(runnerCap)) === normalizeName(String(cap))))
       const load = (runner.queueLength ?? 0) + (runner.runningCount ?? 0)
       const loadScore = Math.max(0, 5 - load)
-      const score = (toolMatch ? 10 : 0) + (projectMatch ? 10 : 0) + (runner.lastProbeOk ? 2 : 0) + loadScore
+      const score = (toolMatch ? 10 : 0) + (projectMatch ? 10 : 0) + (capabilityMatch ? 10 : 0) + (runner.lastProbeOk ? 2 : 0) + loadScore
       return {
         runner,
         score,
         toolMatch,
         projectMatch,
+        capabilityMatch,
         load,
         loadScore,
-        reason: `online runner matched project=${body.projectId ?? 'any'} and tool=${body.tool ?? 'any'} with load ${load}`,
+        reason: `online runner matched project=${body.projectId ?? 'any'}, tool=${body.tool ?? 'any'}, caps=[${required.join(',') || 'none'}] with load ${load}`,
       }
     })
 
   const scored = evaluated
-    .filter((item) => item.toolMatch && item.projectMatch)
+    .filter((item) => item.toolMatch && item.projectMatch && item.capabilityMatch)
     .sort((a, b) => b.score - a.score)
 
   const selected = scored[0]
@@ -267,6 +270,7 @@ function routeRunner(body) {
           projects: item.runner.projects ?? [],
           toolMatch: item.toolMatch,
           projectMatch: item.projectMatch,
+          capabilityMatch: item.capabilityMatch,
           load: item.load,
           loadScore: item.loadScore,
           score: item.score,

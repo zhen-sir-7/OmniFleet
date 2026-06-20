@@ -111,6 +111,7 @@ export function App() {
   const [selectedTool, setSelectedTool] = useState('mock-agent')
   const [taskPriority, setTaskPriority] = useState('normal')
   const [batchMode, setBatchMode] = useState(false)
+  const [requiredCaps, setRequiredCaps] = useState('')
   const [state, setState] = useState<TaskState>('draft')
   const [events, setEvents] = useState<TaskEvent[]>([])
   const [result, setResult] = useState<TaskResult | null>(null)
@@ -314,7 +315,7 @@ export function App() {
           'Content-Type': 'application/json',
           ...(relayToken ? { 'X-OmniFleet-Relay-Token': relayToken } : {}),
         },
-        body: JSON.stringify({ projectId: selectedProject, tool: selectedTool }),
+        body: JSON.stringify({ projectId: selectedProject, tool: selectedTool, requiredCapabilities: parseCommandList(requiredCaps) }),
       })
       if (!response.ok) throw new Error('route preview unavailable')
       const preview = (await response.json()) as { selected?: { name: string }; decision?: { reason: string }; diagnostics?: Record<string, unknown> }
@@ -602,6 +603,7 @@ export function App() {
               projectId: selectedProject,
               tool: selectedTool,
               priority: taskPriority,
+              requiredCapabilities: parseCommandList(requiredCaps),
             })),
           }
         : {
@@ -610,6 +612,7 @@ export function App() {
             projectId: selectedProject,
             tool: selectedTool,
             priority: taskPriority,
+            requiredCapabilities: parseCommandList(requiredCaps),
           }),
     })
 
@@ -1046,6 +1049,15 @@ export function App() {
                 <option value="normal">Normal</option>
                 <option value="low">Low</option>
               </select>
+            </label>
+            <label>
+              <span>Required caps</span>
+              <input
+                value={requiredCaps}
+                placeholder="hasGit, hasDocker"
+                onChange={(event) => setRequiredCaps(event.target.value)}
+                disabled={state === 'running' || state === 'queued'}
+              />
             </label>
           </div>
 
