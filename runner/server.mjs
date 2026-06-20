@@ -260,6 +260,18 @@ function registerProject(body) {
   return { ok: true, status: 201, project: { ...project, absolutePath } }
 }
 
+function unregisterProject(projectId) {
+  if (config.projects.some((project) => project.id === projectId)) {
+    return { ok: false, status: 409, error: 'Built-in config projects cannot be unregistered via API.' }
+  }
+
+  const registered = loadRegisteredProjects()
+  const nextProjects = registered.filter((project) => project.id !== projectId)
+  if (nextProjects.length === registered.length) return { ok: false, status: 404, error: 'Registered project not found.' }
+  saveRegisteredProjects(nextProjects)
+  return { ok: true, status: 200 }
+}
+
 function streamLines(taskId, level, chunk) {
   for (const line of chunk.toString().split(/\r?\n/).filter(Boolean)) {
     sendEvent(taskId, { type: 'log', level, message: line })
@@ -594,6 +606,12 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/api/projects' && req.method === 'POST') {
       const registered = registerProject(await readBody(req))
       return json(res, registered.status, registered.ok ? registered.project : { error: registered.error })
+    }
+
+    const projectDeleteMatch = url.pathname.match(/^\/api\/projects\/([^/]+)$/)
+    if (projectDeleteMatch && req.method === 'DELETE') {
+      const deleted = unregisterProject(projectDeleteMatch[1])
+      return json(res, deleted.status, deleted.ok ? { ok: true } : { error: deleted.error })
     }
 
     if (url.pathname === '/api/tasks' && req.method === 'POST') {

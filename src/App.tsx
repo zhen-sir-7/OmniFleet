@@ -282,6 +282,25 @@ export function App() {
     }
   }
 
+  async function unregisterProject() {
+    try {
+      const endpoint = currentRunner.endpoint ?? apiBase
+      const response = await fetch(`${endpoint}/api/projects/${selectedProject}`, {
+        method: 'DELETE',
+        headers: token ? { 'X-OmniFleet-Token': token } : {},
+      })
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string }
+        throw new Error(payload.error ?? 'failed to unregister project')
+      }
+      setProjectStatus(`unregistered ${selectedProject}`)
+      await loadProjectsForRunner(currentRunner)
+      if (useRelayProxy) await loadRelayRunners()
+    } catch (error) {
+      setProjectStatus(error instanceof Error ? error.message : 'failed to unregister project')
+    }
+  }
+
   async function loadHistory() {
     try {
       const response = await apiFetch('/api/tasks')
@@ -678,6 +697,9 @@ export function App() {
             />
             <button className="secondary compact" onClick={registerProject} disabled={!newProjectName || !newProjectPath}>
               Register project
+            </button>
+            <button className="secondary compact" onClick={unregisterProject} disabled={!selectedProject}>
+              Unregister selected project
             </button>
             {projectStatus && <p className="token-hint neutral-hint">{projectStatus}</p>}
           </div>
