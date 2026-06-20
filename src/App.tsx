@@ -257,6 +257,10 @@ export function App() {
     if (recent[id].length < 3) recent[id].push({ status: item.status, description: item.description })
     return recent
   }, {})
+  const sortedFleet = [...runners].sort((a, b) => {
+    const order: Record<string, number> = { online: 0, stale: 1, offline: 2 }
+    return (order[a.status] ?? 3) - (order[b.status] ?? 3)
+  })
   const historyCounts = history.reduce<Record<string, number>>((counts, item) => {
     counts[item.status] = (counts[item.status] ?? 0) + 1
     counts.total = (counts.total ?? 0) + 1
@@ -1103,7 +1107,7 @@ export function App() {
                 {autoRoute && !routePreview && (
                   <option value="">Checking relay...</option>
                 )}
-                {runners.map((runner) => (
+                {sortedFleet.map((runner) => (
                   <option key={runner.id} value={runner.id}>
                     {runner.name}{runner.endpoint ? ` (${runner.endpoint})` : ''}
                   </option>
@@ -1485,7 +1489,7 @@ export function App() {
             <h2>Runner network</h2>
           </div>
           <div className="fleet-grid">
-            {runners.map((runner) => (
+            {sortedFleet.map((runner) => (
               <button
                 className="fleet-item"
                 key={runner.id}
