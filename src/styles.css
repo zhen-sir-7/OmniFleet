@@ -448,6 +448,10 @@ select {
   border: 1px solid var(--line);
 }
 
+.route-dot.auto {
+  background: var(--accent);
+}
+
 .actions,
 .review-actions {
   display: grid;

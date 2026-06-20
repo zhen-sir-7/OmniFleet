@@ -294,6 +294,7 @@ export function App() {
       setSelectedTool(relayRunners[0].tools[0] ?? 'mock-agent')
       loadProjectsForRunner(relayRunners[0])
       setUseRelayProxy(true)
+      setAutoRoute(true)
       setRelayStatus(`loaded ${relayRunners.length} runner(s) from relay`)
       previewRoute()
     } catch (error) {
@@ -989,12 +990,15 @@ export function App() {
 
           <div className="selector-grid">
             <label>
-              <span>Runner</span>
+              <span>Runner{autoRoute ? ' (routed by relay)' : ''}</span>
               <select
-                value={selectedRunner}
-                onChange={(event) => selectRunner(event.target.value)}
-                disabled={state === 'running' || state === 'queued'}
+                value={autoRoute && routePreview ? '' : selectedRunner}
+                onChange={(event) => { setAutoRoute(false); selectRunner(event.target.value) }}
+                disabled={autoRoute || state === 'running' || state === 'queued'}
               >
+                {autoRoute && !routePreview && (
+                  <option value="">Checking relay...</option>
+                )}
                 {runners.map((runner) => (
                   <option key={runner.id} value={runner.id}>
                     {runner.name}{runner.endpoint ? ` (${runner.endpoint})` : ''}
@@ -1002,6 +1006,7 @@ export function App() {
                 ))}
               </select>
             </label>
+
             <label>
               <span>Project</span>
               <select
@@ -1045,15 +1050,27 @@ export function App() {
           </div>
 
           <div className="route-card">
-            <div>
-              <span className="route-dot" />
-              <strong>{currentRunner.name}</strong>
-            </div>
-            <p>
-              {currentRunner.os} / {currentRunner.status} / {currentProject.defaultCommand}
-            </p>
-            {currentRunner.endpoint && <p>{currentRunner.endpoint}</p>}
-            <p>{currentProject.absolutePath}</p>
+            {autoRoute && routePreview ? (
+              <>
+                <div>
+                  <span className="route-dot auto" />
+                  <strong>Relay routing</strong>
+                </div>
+                <p>{routePreview}</p>
+              </>
+            ) : (
+              <>
+                <div>
+                  <span className="route-dot" />
+                  <strong>{currentRunner.name}</strong>
+                </div>
+                <p>
+                  {currentRunner.os} / {currentRunner.status} / {currentProject.defaultCommand}
+                </p>
+                {currentRunner.endpoint && <p>{currentRunner.endpoint}</p>}
+                <p>{currentProject.absolutePath}</p>
+              </>
+            )}
             {useRelayProxy && (
               <button className="secondary compact route-action" onClick={unregisterRunner} disabled={state === 'running' || state === 'queued'}>
                 Unregister runner
