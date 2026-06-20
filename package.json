@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "relay": "node relay/server.mjs",
     "runner": "node runner/server.mjs",
-    "app": "npm run build && node runner/server.mjs"
+    "app": "npm run build && node runner/server.mjs",
+    "dev:all": "node relay/server.mjs & npm run runner",
+    "dev:ui": "vite"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
