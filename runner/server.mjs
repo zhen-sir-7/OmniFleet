@@ -729,6 +729,13 @@ const server = createServer(async (req, res) => {
         uptimeMs: Date.now() - Date.parse(runnerStartedAt),
         platform: process.platform,
         nodeVersion: process.version,
+        config: {
+          port,
+          relayUrl: process.env.OMNIFLEET_RELAY_URL ?? null,
+          relayRegistered: !!(process.env.OMNIFLEET_RELAY_URL && process.env.OMNIFLEET_RELAY_TOKEN),
+          probeIntervalMs: Number(process.env.OMNIFLEET_RELAY_PROBE_INTERVAL_MS ?? 15000),
+          proxyTimeoutMs: Number(process.env.OMNIFLEET_RELAY_PROXY_TIMEOUT_MS ?? 10000),
+        },
       })
     }
 
