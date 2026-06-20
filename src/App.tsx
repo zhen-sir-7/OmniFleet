@@ -813,7 +813,15 @@ export function App() {
   async function retryTask(id = taskId, runnerId = selectedRunner) {
     if (!id || !runnerOnline) return
 
-    const response = await apiFetch(taskPath('retry', id, runnerId), { method: 'POST' })
+    const response = await apiFetch(useRelayProxy && autoRoute ? '/api/tasks/route' : taskPath('retry', id, runnerId), {
+      method: 'POST',
+      ...(useRelayProxy && autoRoute
+        ? {
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ description: selectedTaskDetail?.description ?? task, projectId: selectedProject, tool: selectedTool, priority: taskPriority, requiredCapabilities: parseCommandList(requiredCaps) }),
+          }
+        : {}),
+    })
     if (!response.ok) {
       const payload = (await response.json()) as { error?: string }
       setEvents((items) => [...items, { type: 'log', level: 'error', message: payload.error ?? 'failed to retry task' }])
