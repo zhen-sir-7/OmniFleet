@@ -817,6 +817,21 @@ const server = createServer(async (req, res) => {
       return json(res, 200, items)
     }
 
+    if (url.pathname === '/api/tasks/prune' && req.method === 'POST') {
+      const { maxAgeDays = 7 } = await readBody(req)
+      const cutoff = new Date(Date.now() - Number(maxAgeDays) * 86400000).toISOString()
+      let removed = 0
+      const finalStatuses = ['review', 'approved', 'applied', 'failed', 'cancelled']
+      for (const [id, task] of tasks.entries()) {
+        if (finalStatuses.includes(task.status) && task.createdAt < cutoff) {
+          tasks.delete(id)
+          removed += 1
+        }
+      }
+      saveTasks()
+      return json(res, 200, { removed, cutoff })
+    }
+
     const taskMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)$/)
     if (taskMatch && req.method === 'GET') {
       const task = tasks.get(taskMatch[1])

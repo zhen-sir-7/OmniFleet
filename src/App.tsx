@@ -123,6 +123,7 @@ export function App() {
   const [relayStatsData, setRelayStatsData] = useState<Record<string, unknown> | null>(null)
   const [logContent, setLogContent] = useState<string | null>(null)
   const [logStatus, setLogStatus] = useState<string | null>(null)
+  const [notifyCount, setNotifyCount] = useState(0)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [history, setHistory] = useState<TaskRecord[]>([])
   const [lastHistoryRefresh, setLastHistoryRefresh] = useState<string | null>(null)
@@ -183,6 +184,16 @@ export function App() {
     const interval = window.setInterval(() => loadHistory(), 15000)
     return () => window.clearInterval(interval)
   }, [runnerOnline])
+
+  useEffect(() => {
+    if (notifyCount === 0) return
+    const reset = () => {
+      setNotifyCount(0)
+      document.title = 'OmniFleet'
+    }
+    window.addEventListener('focus', reset, { once: true })
+    return () => window.removeEventListener('focus', reset)
+  }, [notifyCount])
 
   const currentRunner = runners.find((runner) => runner.id === selectedRunner) ?? runners[0]
   const currentProject = projects.find((project) => project.id === selectedProject) ?? projects[0]
@@ -528,12 +539,26 @@ export function App() {
         if (event.status === 'review' || event.status === 'approved' || event.status === 'applied' || event.status === 'failed' || event.status === 'cancelled') {
           loadHistory()
           source.close()
+          notifyTaskDone(tId, event.status)
         }
       }
     }
     source.onerror = () => {
       setEvents((items) => [...items, { type: 'log', level: 'error', message: 'event stream disconnected' }])
       source.close()
+    }
+  }
+
+  function notifyTaskDone(tId: string, status: string) {
+    const next = notifyCount + 1
+    setNotifyCount(next)
+    document.title = `(${next}) OmniFleet — ${status}`
+    try {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('OmniFleet task completed', { body: `${tId}: ${status}`, tag: tId })
+      }
+    } catch {
+      // Browser notifications unavailable.
     }
   }
 
