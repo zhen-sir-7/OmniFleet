@@ -673,6 +673,44 @@ const server = createServer(async (req, res) => {
   try {
     if (url.pathname === '/api/health') return json(res, 200, { ok: true, tokenRequired: true, runner: { id: device.id, name: device.name, startedAt: runnerStartedAt, uptimeMs: Date.now() - Date.parse(runnerStartedAt) } })
 
+    if (url.pathname === '/api/worktrees' && req.method === 'GET') {
+      const worktreeRoot = resolve(root, config.security?.worktreeRoot ?? '.omnifleet/worktrees')
+      mkdirSync(worktreeRoot, { recursive: true })
+      const entries = []
+      try {
+        for (const name of await import('node:fs').then((fs) => fs.readdirSync(worktreeRoot))) {
+          const fullPath = resolve(worktreeRoot, name)
+          if (!statSync(fullPath).isDirectory()) continue
+          const task = tasks.get(name)
+          entries.push({ taskId: name, path: fullPath, taskStatus: task?.status ?? 'unknown' })
+        }
+      } catch {
+        // Directory may not exist yet.
+      }
+      return json(res, 200, entries)
+    }
+
+    if (url.pathname === '/api/worktrees/cleanup' && req.method === 'POST') {
+      const finishedStatuses = ['review', 'approved', 'applied', 'failed', 'cancelled']
+      const worktreeRoot = resolve(root, config.security?.worktreeRoot ?? '.omnifleet/worktrees')
+      mkdirSync(worktreeRoot, { recursive: true })
+      let cleaned = 0
+      try {
+        for (const name of await import('node:fs').then((fs) => fs.readdirSync(worktreeRoot))) {
+          const fullPath = resolve(worktreeRoot, name)
+          if (!statSync(fullPath).isDirectory()) continue
+          const task = tasks.get(name)
+          if (task && finishedStatuses.includes(task.status)) {
+            rmSync(fullPath, { recursive: true, force: true })
+            cleaned += 1
+          }
+        }
+      } catch {
+        // Directory may not exist.
+      }
+      return json(res, 200, { cleaned })
+    }
+
     if (url.pathname === '/api/stats' && req.method === 'GET') {
       const allTasks = Array.from(tasks.values())
       const byStatus = {}
