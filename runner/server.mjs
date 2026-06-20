@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const config = JSON.parse(readFileSync(join(root, 'omnifleet.config.json'), 'utf8'))
+const maxConcurrent = config.security?.maxConcurrent ?? 1
 const port = Number(process.env.OMNIFLEET_PORT ?? 8787)
 const stateDir = resolve(root, '.omnifleet')
 const taskStorePath = resolve(stateDir, 'tasks.json')
@@ -18,7 +19,6 @@ const runningProcesses = new Map()
 const device = loadDevice()
 const runnerStartedAt = new Date().toISOString()
 const taskQueue = []
-let taskRunning = false
 const logsDir = resolve(stateDir, 'logs')
 
 function priorityWeight(priority) {
@@ -28,25 +28,33 @@ function priorityWeight(priority) {
 }
 
 async function drainQueue() {
-  if (taskRunning) return
   if (taskQueue.length === 0) return
+  const running = Array.from(tasks.values()).filter((task) => task.status === 'running').length
+  if (running >= maxConcurrent) return
 
-  taskRunning = true
-  while (taskQueue.length > 0) {
-    taskQueue.sort((a, b) => priorityWeight(a.priority) - priorityWeight(b.priority) || a.createdAt.localeCompare(b.createdAt))
-    const next = taskQueue.shift()
-    const task = tasks.get(next.id)
-    if (!task || task.status !== 'queued') continue
-    await runTask(next.id)
-  }
-  taskRunning = false
+  taskQueue.sort((a, b) => priorityWeight(a.priority) - priorityWeight(b.priority) || a.createdAt.localeCompare(b.createdAt))
+  const next = taskQueue.shift()
+  if (!next) return
+  const task = tasks.get(next.id)
+  if (!task || task.status !== 'queued') return
+  await runTask(next.id)
+  setImmediate(() => drainQueue())
 }
 
 function loadTasks() {
   try {
     if (!existsSync(taskStorePath)) return new Map()
     const items = JSON.parse(readFileSync(taskStorePath, 'utf8'))
-    return new Map(items.map((task) => [task.id, task]))
+    const map = new Map()
+    for (const task of items) {
+      if (task.status === 'running' || task.status === 'queued') {
+        task.status = 'failed'
+        task.result = { ok: false, summary: 'Runner restarted before this task could complete.' }
+      }
+      map.set(task.id, task)
+    }
+    saveMap(map)
+    return map
   } catch {
     return new Map()
   }
@@ -56,6 +64,11 @@ function saveTasks() {
   mkdirSync(stateDir, { recursive: true })
   const items = Array.from(tasks.values()).slice(-100)
   writeFileSync(taskStorePath, JSON.stringify(items, null, 2), 'utf8')
+}
+
+function saveMap(map) {
+  mkdirSync(stateDir, { recursive: true })
+  writeFileSync(taskStorePath, JSON.stringify(Array.from(map.values()).slice(-100), null, 2), 'utf8')
 }
 
 function loadRegisteredProjects() {
@@ -629,6 +642,7 @@ async function runTask(taskId) {
       diff: resultDiff,
     },
   })
+  setImmediate(() => drainQueue())
 }
 
 function serveStatic(req, res) {
