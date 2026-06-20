@@ -257,6 +257,7 @@ export function App() {
     if (recent[id].length < 3) recent[id].push({ status: item.status, description: item.description })
     return recent
   }, {})
+  const taskRetryChildren = history.filter((item) => item.retryOf === taskId).slice(0, 5)
   const sortedFleet = [...runners].sort((a, b) => {
     const order: Record<string, number> = { online: 0, stale: 1, offline: 2 }
     return (order[a.status] ?? 3) - (order[b.status] ?? 3)
@@ -1294,6 +1295,9 @@ export function App() {
             <span>tool: {selectedTaskDetail?.tool ?? selectedTool}</span>
             <span>priority: {selectedTaskDetail?.priority ?? taskPriority}</span>
             {selectedTaskDetail?.retryOf && <span>retry: {selectedTaskDetail.retryOf}</span>}
+            {taskRetryChildren.length > 0 && (
+              <span>retried as: {taskRetryChildren.map((child) => child.status).join(', ')}</span>
+            )}
           </div>
 
           <div className="log-window">
