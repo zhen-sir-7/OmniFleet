@@ -80,7 +80,7 @@ function json(res, status, data) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   })
   res.end(JSON.stringify(data))
@@ -270,6 +270,36 @@ function unregisterProject(projectId) {
   if (nextProjects.length === registered.length) return { ok: false, status: 404, error: 'Registered project not found.' }
   saveRegisteredProjects(nextProjects)
   return { ok: true, status: 200 }
+}
+
+function updateProject(projectId, body) {
+  if (config.projects.some((project) => project.id === projectId)) {
+    return { ok: false, status: 409, error: 'Built-in config projects cannot be updated via API.' }
+  }
+
+  const registered = loadRegisteredProjects()
+  const index = registered.findIndex((project) => project.id === projectId)
+  if (index === -1) return { ok: false, status: 404, error: 'Registered project not found.' }
+
+  const current = registered[index]
+  const next = {
+    ...current,
+    name: body.name === undefined ? current.name : String(body.name).trim(),
+    path: body.path === undefined ? current.path : String(body.path).trim(),
+    allowedCommands: Array.isArray(body.allowedCommands) && body.allowedCommands.length > 0
+      ? body.allowedCommands.map(String)
+      : current.allowedCommands,
+  }
+  next.defaultCommand = body.defaultCommand === undefined ? current.defaultCommand : String(body.defaultCommand)
+
+  if (!next.name || !next.path) return { ok: false, status: 400, error: 'name and path are required.' }
+  const absolutePath = resolve(root, next.path)
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isDirectory()) return { ok: false, status: 400, error: 'Project path must exist and be a directory.' }
+  if (!next.allowedCommands.includes(next.defaultCommand)) return { ok: false, status: 400, error: 'defaultCommand must be included in allowedCommands.' }
+
+  registered[index] = next
+  saveRegisteredProjects(registered)
+  return { ok: true, status: 200, project: { ...next, absolutePath } }
 }
 
 function streamLines(taskId, level, chunk) {
@@ -612,6 +642,12 @@ const server = createServer(async (req, res) => {
     if (projectDeleteMatch && req.method === 'DELETE') {
       const deleted = unregisterProject(projectDeleteMatch[1])
       return json(res, deleted.status, deleted.ok ? { ok: true } : { error: deleted.error })
+    }
+
+    const projectUpdateMatch = url.pathname.match(/^\/api\/projects\/([^/]+)$/)
+    if (projectUpdateMatch && req.method === 'PATCH') {
+      const updated = updateProject(projectUpdateMatch[1], await readBody(req))
+      return json(res, updated.status, updated.ok ? updated.project : { error: updated.error })
     }
 
     if (url.pathname === '/api/tasks' && req.method === 'POST') {

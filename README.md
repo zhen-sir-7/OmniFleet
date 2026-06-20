@@ -612,6 +612,7 @@ GET  /api/health
 GET  /api/runners
 GET  /api/projects
 POST /api/projects
+PATCH /api/projects/:projectId
 DELETE /api/projects/:projectId
 GET  /api/tasks
 POST /api/tasks
@@ -808,6 +809,6 @@ Additional projects can be registered on a runner with `POST /api/projects`. Reg
 
 The web UI includes a small project registration form. A project registration requires a name, path, allowed command list, and default command. The runner validates that the path exists and that the default command is included in the allowed command list.
 
-Dynamic projects can be removed with `DELETE /api/projects/:projectId`. Built-in projects from `omnifleet.config.json` cannot be removed through the API.
+Dynamic projects can be updated with `PATCH /api/projects/:projectId` and removed with `DELETE /api/projects/:projectId`. Built-in projects from `omnifleet.config.json` cannot be updated or removed through the API.
 
 This gives OmniFleet a real but safe first landing point: the user can dispatch a task to a local runner and observe an actual project command execute with streamed logs.

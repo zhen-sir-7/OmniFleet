@@ -301,6 +301,38 @@ export function App() {
     }
   }
 
+  async function updateProject() {
+    try {
+      const endpoint = currentRunner.endpoint ?? apiBase
+      const name = newProjectName || currentProject.name
+      const path = newProjectPath || currentProject.absolutePath
+      const command = newProjectCommand || currentProject.defaultCommand
+      const response = await fetch(`${endpoint}/api/projects/${selectedProject}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'X-OmniFleet-Token': token } : {}),
+        },
+        body: JSON.stringify({
+          name,
+          path,
+          allowedCommands: [command],
+          defaultCommand: command,
+        }),
+      })
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string }
+        throw new Error(payload.error ?? 'failed to update project')
+      }
+      const project = (await response.json()) as Project
+      setProjectStatus(`updated ${project.name}`)
+      await loadProjectsForRunner(currentRunner)
+      if (useRelayProxy) await loadRelayRunners()
+    } catch (error) {
+      setProjectStatus(error instanceof Error ? error.message : 'failed to update project')
+    }
+  }
+
   async function loadHistory() {
     try {
       const response = await apiFetch('/api/tasks')
@@ -697,6 +729,9 @@ export function App() {
             />
             <button className="secondary compact" onClick={registerProject} disabled={!newProjectName || !newProjectPath}>
               Register project
+            </button>
+            <button className="secondary compact" onClick={updateProject} disabled={!selectedProject}>
+              Update selected project
             </button>
             <button className="secondary compact" onClick={unregisterProject} disabled={!selectedProject}>
               Unregister selected project
