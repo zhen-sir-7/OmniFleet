@@ -16,6 +16,7 @@ const tasks = loadTasks()
 const subscribers = new Map()
 const runningProcesses = new Map()
 const device = loadDevice()
+const runnerStartedAt = new Date().toISOString()
 
 function loadTasks() {
   try {
@@ -644,7 +645,7 @@ const server = createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return json(res, 204, {})
 
   try {
-    if (url.pathname === '/api/health') return json(res, 200, { ok: true, tokenRequired: true, runner: { id: device.id, name: device.name } })
+    if (url.pathname === '/api/health') return json(res, 200, { ok: true, tokenRequired: true, runner: { id: device.id, name: device.name, startedAt: runnerStartedAt, uptimeMs: Date.now() - Date.parse(runnerStartedAt) } })
     if (url.pathname.startsWith('/api/') && !isAuthorized(req, url)) return unauthorized(res)
 
     if (url.pathname === '/api/runners') return json(res, 200, [await runnerPayload()])

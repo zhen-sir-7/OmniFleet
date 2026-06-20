@@ -114,6 +114,7 @@ export function App() {
   const [taskId, setTaskId] = useState<string | null>(null)
   const [selectedTaskDetail, setSelectedTaskDetail] = useState<TaskDetail | null>(null)
   const [runnerOnline, setRunnerOnline] = useState(false)
+  const [runnerUptime, setRunnerUptime] = useState<string | null>(null)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [history, setHistory] = useState<TaskRecord[]>([])
   const [historyQuery, setHistoryQuery] = useState('')
@@ -150,6 +151,7 @@ export function App() {
         setRunnerOnline(true)
         setAuthError(null)
         loadHistory()
+        fetchHealth()
       } catch (error) {
         setRunnerOnline(false)
         setAuthError(error instanceof Error ? error.message : 'runner unavailable')
@@ -367,6 +369,26 @@ export function App() {
       if (useRelayProxy) await loadRelayRunners()
     } catch (error) {
       setProjectStatus(error instanceof Error ? error.message : 'failed to update project')
+    }
+  }
+
+  async function fetchHealth() {
+    try {
+      const base = useRelayProxy ? relayBase : runnerBase
+      const response = await fetch(`${base}/api/health`, {
+        headers: {
+          ...(useRelayProxy && relayToken ? { 'X-OmniFleet-Relay-Token': relayToken } : {}),
+          ...(token ? { 'X-OmniFleet-Token': token } : {}),
+        },
+      })
+      if (response.ok) {
+        const health = (await response.json()) as { runner?: { startedAt?: string; uptimeMs?: number } }
+        if (health.runner?.startedAt) {
+          setRunnerUptime(new Date(health.runner.startedAt).toLocaleString())
+        }
+      }
+    } catch {
+      setRunnerUptime(null)
     }
   }
 
@@ -659,7 +681,7 @@ export function App() {
           </div>
 
           <div className={runnerOnline ? 'connection live' : 'connection demo'}>
-            {runnerOnline ? 'Local runner connected' : 'Runner offline: using demo mode'}
+            {runnerOnline ? `Local runner connected${runnerUptime ? ' since ' + runnerUptime : ''}` : 'Runner offline: using demo mode'}
           </div>
 
           <label className="field-label" htmlFor="token-input">
