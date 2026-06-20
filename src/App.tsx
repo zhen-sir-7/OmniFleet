@@ -731,6 +731,15 @@ export function App() {
             id="task-input"
             value={task}
             onChange={(event) => setTask(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                event.preventDefault()
+                startTask()
+              } else if (event.key === 'Escape') {
+                event.preventDefault()
+                resetTask()
+              }
+            }}
             disabled={state === 'running' || state === 'queued'}
           />
 
