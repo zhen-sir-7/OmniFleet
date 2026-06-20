@@ -544,6 +544,8 @@ export function App() {
     setTaskId(null)
     setSelectedTaskDetail(null)
     setApplyError(null)
+    setLogContent(null)
+    setLogStatus(null)
 
     if (batchMode) {
       const lines = task.split(/\r?\n/).filter(Boolean)
@@ -771,6 +773,8 @@ export function App() {
     setTaskId(null)
     setSelectedTaskDetail(null)
     setApplyError(null)
+    setLogContent(null)
+    setLogStatus(null)
   }
 
   return (
