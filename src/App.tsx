@@ -110,6 +110,7 @@ export function App() {
   const [events, setEvents] = useState<TaskEvent[]>([])
   const [result, setResult] = useState<TaskResult | null>(null)
   const [taskId, setTaskId] = useState<string | null>(null)
+  const [selectedTaskDetail, setSelectedTaskDetail] = useState<TaskDetail | null>(null)
   const [runnerOnline, setRunnerOnline] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [history, setHistory] = useState<TaskRecord[]>([])
@@ -366,11 +367,13 @@ export function App() {
       setState(detail.status)
       setResult(detail.result)
       setEvents(detail.events ?? [])
+      setSelectedTaskDetail(detail)
     } catch (error) {
       setTaskId(item.id)
       if (item.runnerId) setSelectedRunner(item.runnerId)
       setState(item.status)
       setResult(item.result)
+      setSelectedTaskDetail(item)
       setEvents([{ type: 'log', level: 'error', message: error instanceof Error ? error.message : 'failed to load task detail' }])
     }
   }
@@ -380,6 +383,7 @@ export function App() {
     setEvents([])
     setResult(null)
     setTaskId(null)
+    setSelectedTaskDetail(null)
     setApplyError(null)
 
     if (!runnerOnline) {
@@ -416,6 +420,16 @@ export function App() {
     const eventRunnerId = created.runnerId ?? selectedRunner
     if (created.runnerId) setSelectedRunner(created.runnerId)
     setTaskId(created.id)
+    setSelectedTaskDetail({
+      id: created.id,
+      runnerId: eventRunnerId,
+      description: task,
+      tool: selectedTool,
+      status: 'queued',
+      createdAt: new Date().toISOString(),
+      result: null,
+      events: [],
+    })
     loadHistory()
     const eventBase = useRelayProxy ? relayBase : runnerBase
     const eventParams = new URLSearchParams({ token })
@@ -429,6 +443,7 @@ export function App() {
       if (event.type === 'state' && event.status) {
         setState(event.status)
         if (event.result) setResult(event.result)
+        setSelectedTaskDetail((detail) => detail ? { ...detail, status: event.status!, result: event.result ?? detail.result } : detail)
         if (event.status === 'review' || event.status === 'approved' || event.status === 'applied' || event.status === 'failed' || event.status === 'cancelled') {
           loadHistory()
           source.close()
@@ -489,6 +504,7 @@ export function App() {
     const applied = (await response.json()) as { status: TaskState; result: TaskResult | null }
     setState(applied.status)
     if (applied.result) setResult(applied.result)
+    setSelectedTaskDetail((detail) => detail ? { ...detail, status: applied.status, result: applied.result } : detail)
     loadHistory()
   }
 
@@ -505,6 +521,7 @@ export function App() {
     const cancelled = (await response.json()) as { status: TaskState; result: TaskResult | null }
     setState(cancelled.status)
     if (cancelled.result) setResult(cancelled.result)
+    setSelectedTaskDetail((detail) => detail ? { ...detail, status: cancelled.status, result: cancelled.result } : detail)
     loadHistory()
   }
 
@@ -525,6 +542,17 @@ export function App() {
     setState('queued')
     setEvents([])
     setResult(null)
+    setSelectedTaskDetail({
+      id: retried.id,
+      runnerId: eventRunnerId,
+      description: selectedTaskDetail?.description ?? task,
+      tool: selectedTool,
+      status: 'queued',
+      createdAt: new Date().toISOString(),
+      retryOf: id,
+      result: null,
+      events: [],
+    })
     loadHistory()
 
     const eventBase = useRelayProxy ? relayBase : runnerBase
@@ -537,6 +565,7 @@ export function App() {
       if (event.type === 'state' && event.status) {
         setState(event.status)
         if (event.result) setResult(event.result)
+        setSelectedTaskDetail((detail) => detail ? { ...detail, status: event.status!, result: event.result ?? detail.result } : detail)
         if (event.status === 'review' || event.status === 'approved' || event.status === 'applied' || event.status === 'failed' || event.status === 'cancelled') {
           loadHistory()
           source.close()
@@ -570,6 +599,7 @@ export function App() {
     setEvents([])
     setResult(null)
     setTaskId(null)
+    setSelectedTaskDetail(null)
     setApplyError(null)
   }
 
@@ -803,6 +833,14 @@ export function App() {
             <Node active={state === 'queued' || state === 'running' || state === 'review' || state === 'approved'} label="Runner" />
             <Line />
             <Node active={state === 'review' || state === 'approved'} label="Review" />
+          </div>
+
+          <div className="task-meta">
+            <span>task: {taskId ?? 'none'}</span>
+            <span>runner: {selectedTaskDetail?.runnerName ?? currentRunner.name}</span>
+            <span>project: {selectedProject}</span>
+            <span>tool: {selectedTaskDetail?.tool ?? selectedTool}</span>
+            {selectedTaskDetail?.retryOf && <span>retry: {selectedTaskDetail.retryOf}</span>}
           </div>
 
           <div className="log-window">

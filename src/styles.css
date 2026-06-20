@@ -470,6 +470,26 @@ select {
   background: var(--line);
 }
 
+.task-meta {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.task-meta span {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .log-window {
   min-height: 455px;
   border: 1px solid var(--line);
@@ -699,7 +719,8 @@ select {
   .actions,
   .review-actions,
   .policy-grid,
-  .history-grid {
+  .history-grid,
+  .task-meta {
     grid-template-columns: 1fr;
   }
 
