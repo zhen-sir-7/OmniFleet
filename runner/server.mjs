@@ -17,6 +17,29 @@ const subscribers = new Map()
 const runningProcesses = new Map()
 const device = loadDevice()
 const runnerStartedAt = new Date().toISOString()
+const taskQueue = []
+let taskRunning = false
+
+function priorityWeight(priority) {
+  if (priority === 'high') return 0
+  if (priority === 'low') return 2
+  return 1
+}
+
+async function drainQueue() {
+  if (taskRunning) return
+  if (taskQueue.length === 0) return
+
+  taskRunning = true
+  while (taskQueue.length > 0) {
+    taskQueue.sort((a, b) => priorityWeight(a.priority) - priorityWeight(b.priority) || a.createdAt.localeCompare(b.createdAt))
+    const next = taskQueue.shift()
+    const task = tasks.get(next.id)
+    if (!task || task.status !== 'queued') continue
+    await runTask(next.id)
+  }
+  taskRunning = false
+}
 
 function loadTasks() {
   try {
@@ -216,6 +239,7 @@ function publicTask(task) {
     runnerId: task.runnerId,
     projectId: task.projectId,
     tool: task.tool,
+    priority: task.priority ?? 'normal',
     status: task.status,
     createdAt: task.createdAt,
     retryOf: task.retryOf ?? null,
@@ -628,6 +652,7 @@ function createTask(body, retryOf = null) {
     runnerId: body.runnerId ?? config.runner.id,
     projectId: body.projectId ?? config.projects[0].id,
     tool: body.tool ?? config.runner.tools[0],
+    priority: ['high', 'low'].includes(String(body.priority ?? '')) ? String(body.priority) : 'normal',
     status: 'queued',
     createdAt: new Date().toISOString(),
     retryOf,
@@ -635,7 +660,8 @@ function createTask(body, retryOf = null) {
   }
   tasks.set(id, task)
   saveTasks()
-  setTimeout(() => runTask(id), 250)
+  taskQueue.push(task)
+  setTimeout(() => drainQueue(), 250)
   return task
 }
 

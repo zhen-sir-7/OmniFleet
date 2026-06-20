@@ -52,6 +52,7 @@ type TaskRecord = {
   runnerName?: string
   description: string
   tool: string
+  priority?: string
   status: TaskState
   createdAt: string
   retryOf?: string | null
@@ -108,6 +109,7 @@ export function App() {
   const [selectedRunner, setSelectedRunner] = useState(fallbackRunners[0].id)
   const [selectedProject, setSelectedProject] = useState(fallbackProjects[0].id)
   const [selectedTool, setSelectedTool] = useState('mock-agent')
+  const [taskPriority, setTaskPriority] = useState('normal')
   const [state, setState] = useState<TaskState>('draft')
   const [events, setEvents] = useState<TaskEvent[]>([])
   const [result, setResult] = useState<TaskResult | null>(null)
@@ -452,6 +454,7 @@ export function App() {
         runnerId: selectedRunner,
         projectId: selectedProject,
         tool: selectedTool,
+        priority: taskPriority,
       }),
     })
 
@@ -846,6 +849,18 @@ export function App() {
                 ))}
               </select>
             </label>
+            <label>
+              <span>Priority</span>
+              <select
+                value={taskPriority}
+                onChange={(event) => setTaskPriority(event.target.value)}
+                disabled={state === 'running' || state === 'queued'}
+              >
+                <option value="high">High</option>
+                <option value="normal">Normal</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
           </div>
 
           <div className="route-card">
@@ -933,6 +948,7 @@ export function App() {
             <span>runner: {selectedTaskDetail?.runnerName ?? currentRunner.name}</span>
             <span>project: {selectedProject}</span>
             <span>tool: {selectedTaskDetail?.tool ?? selectedTool}</span>
+            <span>priority: {selectedTaskDetail?.priority ?? taskPriority}</span>
             {selectedTaskDetail?.retryOf && <span>retry: {selectedTaskDetail.retryOf}</span>}
           </div>
 
@@ -1087,6 +1103,7 @@ export function App() {
                 <span>{item.status}</span>
                 <strong>{item.description || item.id}</strong>
                 {item.retryOf && <small>retry of {item.retryOf}</small>}
+                {item.priority && item.priority !== 'normal' && <small>{item.priority}</small>}
                 {item.routing && <small>{item.routing.mode}: {item.routing.selectedRunnerName}</small>}
                 <small>{item.runnerName ? `${item.runnerName} / ` : ''}{item.tool} / {new Date(item.createdAt).toLocaleString()}</small>
                 <span
