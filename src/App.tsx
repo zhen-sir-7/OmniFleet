@@ -1020,6 +1020,18 @@ export function App() {
                 {item.retryOf && <small>retry of {item.retryOf}</small>}
                 {item.routing && <small>{item.routing.mode}: {item.routing.selectedRunnerName}</small>}
                 <small>{item.runnerName ? `${item.runnerName} / ` : ''}{item.tool} / {new Date(item.createdAt).toLocaleString()}</small>
+                <span
+                  className="history-reuse"
+                  title="Copy prompt to task input"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    if (item.description) setTask(item.description)
+                    if (item.tool) setSelectedTool(item.tool)
+                    if (item.runnerId) setSelectedRunner(item.runnerId)
+                  }}
+                >
+                  &crarr; Reuse
+                </span>
               </button>
             ))}
           </div>

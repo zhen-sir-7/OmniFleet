@@ -705,6 +705,16 @@ select {
   text-transform: uppercase;
 }
 
+.history-reuse {
+  display: block;
+  margin-top: 6px;
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .history-item strong {
   display: -webkit-box;
   overflow: hidden;
