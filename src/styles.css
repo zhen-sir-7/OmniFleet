@@ -822,6 +822,12 @@ select {
   color: var(--ink) !important;
 }
 
+.fleet-task-count {
+  font-size: 0.72rem !important;
+  color: var(--accent) !important;
+  font-weight: 800;
+}
+
 .history-summary {
   display: grid;
   grid-template-columns: repeat(8, 1fr);

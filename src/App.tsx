@@ -239,6 +239,13 @@ export function App() {
     const matchesStatus = historyStatus === 'all' || item.status === historyStatus
     return matchesQuery && matchesStatus
   })
+  const fleetTaskCounts = history.reduce<Record<string, { total: number; active: number }>>((counts, item) => {
+    const id = item.runnerId ?? 'unknown'
+    if (!counts[id]) counts[id] = { total: 0, active: 0 }
+    counts[id].total += 1
+    if (item.status === 'queued' || item.status === 'running') counts[id].active += 1
+    return counts
+  }, {})
   const historyCounts = history.reduce<Record<string, number>>((counts, item) => {
     counts[item.status] = (counts[item.status] ?? 0) + 1
     counts.total = (counts.total ?? 0) + 1
@@ -1443,6 +1450,10 @@ export function App() {
                 </p>
                 <p className="fleet-caps">
                   caps: {runner.capabilities?.join(', ') || 'none'}
+                </p>
+                <p className="fleet-task-count">
+                  tasks: {fleetTaskCounts[runner.id]?.total ?? 0}
+                  {fleetTaskCounts[runner.id]?.active ? ` (${fleetTaskCounts[runner.id].active} active)` : ''}
                 </p>
               </button>
             ))}
