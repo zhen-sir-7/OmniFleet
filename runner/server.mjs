@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import { randomBytes } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -19,6 +19,7 @@ const device = loadDevice()
 const runnerStartedAt = new Date().toISOString()
 const taskQueue = []
 let taskRunning = false
+const logsDir = resolve(stateDir, 'logs')
 
 function priorityWeight(priority) {
   if (priority === 'high') return 0
@@ -220,6 +221,13 @@ function sendEvent(taskId, event) {
 
   task.events.push(event)
   saveTasks()
+  mkdirSync(logsDir, { recursive: true })
+  try {
+    const line = JSON.stringify(event) + '\n'
+    appendFileSync(resolve(logsDir, `${taskId}.log`), line, 'utf8')
+  } catch {
+    // Log file write failure is non-fatal.
+  }
   const clients = subscribers.get(taskId) ?? new Set()
   for (const res of clients) res.write(`data: ${JSON.stringify(event)}\n\n`)
 }
@@ -830,6 +838,17 @@ const server = createServer(async (req, res) => {
         runner: await runnerPayload(),
         task,
       })
+    }
+
+    const logMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/log$/)
+    if (logMatch && req.method === 'GET') {
+      const logPath = resolve(logsDir, `${logMatch[1]}.log`)
+      if (!existsSync(logPath)) return json(res, 404, { error: 'Log file not found' })
+      const logContent = readFileSync(logPath, 'utf8')
+      const events = logContent.split(/\r?\n/).filter(Boolean).map((line) => {
+        try { return JSON.parse(line) } catch { return { raw: line } }
+      })
+      return json(res, 200, { taskId: logMatch[1], events, size: logContent.length })
     }
 
     const applyMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/apply$/)
