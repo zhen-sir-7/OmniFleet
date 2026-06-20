@@ -394,6 +394,20 @@ const server = createServer(async (req, res) => {
       })
     }
 
+    if (url.pathname === '/api/projects' && req.method === 'GET') {
+      const seen = new Set()
+      const projects = []
+      for (const runner of runners.values()) {
+        for (const project of runner.projects ?? []) {
+          const key = normalizeName(project)
+          if (seen.has(key)) continue
+          seen.add(key)
+          projects.push({ id: key, name: project, runnerId: runner.id, runnerName: runner.name })
+        }
+      }
+      return json(res, 200, projects)
+    }
+
     if (url.pathname === '/api/runners' && req.method === 'GET') {
       const items = Array.from(runners.values())
         .map((runner) => ({

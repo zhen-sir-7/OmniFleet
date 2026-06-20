@@ -251,9 +251,11 @@ export function App() {
 
   async function loadProjectsForRunner(runner: Runner) {
     try {
-      const endpoint = runner.endpoint ?? apiBase
+      const endpoint = useRelayProxy ? relayBase : (runner.endpoint ?? apiBase)
       const response = await fetch(`${endpoint}/api/projects`, {
-        headers: token ? { 'X-OmniFleet-Token': token } : {},
+        headers: useRelayProxy
+          ? (relayToken ? { 'X-OmniFleet-Relay-Token': relayToken } : {})
+          : (token ? { 'X-OmniFleet-Token': token } : {}),
       })
       if (!response.ok) throw new Error('runner projects unavailable')
       const nextProjects = (await response.json()) as Project[]
