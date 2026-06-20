@@ -832,7 +832,7 @@ export function App() {
           </div>
 
           <div className={runnerOnline ? 'connection live' : 'connection demo'}>
-            {runnerOnline ? `Local runner connected${latencyMs !== null ? ` (${latencyMs}ms)` : ''}${runnerUptime ? ' since ' + runnerUptime : ''}` : 'Runner offline: using demo mode'}
+            {runnerOnline ? `Local runner connected${latencyMs !== null ? ` (${latencyMs}ms)` : ''}${runnerUptime ? ' since ' + runnerUptime : ''}${runnerStats?.platform ? ` · ${runnerStats.platform} · Node ${runnerStats.nodeVersion}` : ''}` : 'Runner offline: using demo mode'}
           </div>
 
           <label className="field-label" htmlFor="token-input">
