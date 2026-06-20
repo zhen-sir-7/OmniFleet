@@ -456,6 +456,18 @@ const server = createServer(async (req, res) => {
       return
     }
 
+    if (url.pathname === '/api/tasks/route/preview' && req.method === 'POST') {
+      const body = await readBody(req)
+      const routed = routeRunner(body)
+      return json(res, 200, {
+        selected: routed.runner
+          ? { id: routed.runner.id, name: routed.runner.name, endpoint: routed.runner.endpoint }
+          : null,
+        decision: routed.decision ?? null,
+        diagnostics: routed.diagnostics ?? null,
+      })
+    }
+
     if (url.pathname === '/api/tasks/route' && req.method === 'POST') {
       const body = await readBody(req)
       const routed = routeRunner(body)

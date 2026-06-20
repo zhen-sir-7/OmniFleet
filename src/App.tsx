@@ -135,6 +135,7 @@ export function App() {
   const [relayStatus, setRelayStatus] = useState<string | null>(null)
   const [useRelayProxy, setUseRelayProxy] = useState(false)
   const [autoRoute, setAutoRoute] = useState(false)
+  const [routePreview, setRoutePreview] = useState<string | null>(null)
   const [newProjectName, setNewProjectName] = useState('')
   const [newProjectPath, setNewProjectPath] = useState('')
   const [newProjectCommands, setNewProjectCommands] = useState('npm run build')
@@ -171,6 +172,10 @@ export function App() {
 
     loadRunner()
   }, [token])
+
+  useEffect(() => {
+    previewRoute()
+  }, [autoRoute, selectedProject, selectedTool])
 
   useEffect(() => {
     if (!runnerOnline) return
@@ -255,6 +260,7 @@ export function App() {
       setSelectedTool(runner.tools[0] ?? 'mock-agent')
       loadProjectsForRunner(runner)
     }
+    previewRoute()
   }
 
   async function loadRelayRunners() {
@@ -276,8 +282,33 @@ export function App() {
       loadProjectsForRunner(relayRunners[0])
       setUseRelayProxy(true)
       setRelayStatus(`loaded ${relayRunners.length} runner(s) from relay`)
+      previewRoute()
     } catch (error) {
       setRelayStatus(error instanceof Error ? error.message : 'relay unavailable')
+    }
+  }
+
+  async function previewRoute() {
+    if (!useRelayProxy || !autoRoute) {
+      setRoutePreview(null)
+      return
+    }
+    try {
+      const response = await fetch(`${relayBase}/api/tasks/route/preview`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(relayToken ? { 'X-OmniFleet-Relay-Token': relayToken } : {}),
+        },
+        body: JSON.stringify({ projectId: selectedProject, tool: selectedTool }),
+      })
+      if (!response.ok) throw new Error('route preview unavailable')
+      const preview = (await response.json()) as { selected?: { name: string }; decision?: { reason: string }; diagnostics?: Record<string, unknown> }
+      setRoutePreview(preview.selected
+        ? `Route: ${preview.selected.name} — ${preview.decision?.reason ?? ''}`
+        : `No online runner matched project=${selectedProject} tool=${selectedTool}`)
+    } catch {
+      setRoutePreview(null)
     }
   }
 
@@ -870,6 +901,7 @@ export function App() {
             />
             <span>Auto route to an online matching runner</span>
           </label>
+          {routePreview && <p className="token-hint neutral-hint">{routePreview}</p>}
 
           <label className="field-label" htmlFor="task-input">
             Development request
