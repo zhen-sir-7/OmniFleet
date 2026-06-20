@@ -760,6 +760,68 @@ select {
   letter-spacing: 0.08em;
 }
 
+.fleet-panel {
+  margin-top: 24px;
+  padding: 22px;
+}
+
+.fleet-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.fleet-item {
+  min-height: 140px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 252, 244, 0.72);
+}
+
+.fleet-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.fleet-head strong {
+  font-size: 0.9rem;
+  letter-spacing: -0.03em;
+}
+
+.fleet-head small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.fleet-dot {
+  width: 10px;
+  height: 10px;
+  background: var(--muted);
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.fleet-dot.live {
+  background: var(--green);
+}
+
+.fleet-item p {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.fleet-caps {
+  font-size: 0.65rem !important;
+  color: var(--ink) !important;
+}
+
 .history-summary {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
@@ -857,11 +919,13 @@ select {
   .task-panel,
   .event-panel,
   .review-panel,
-  .history-panel {
+  .history-panel,
+  .fleet-panel {
     min-height: auto;
   }
 
-  .history-grid {
+  .history-grid,
+  .fleet-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
@@ -899,7 +963,8 @@ select {
   .history-grid,
   .history-filters,
   .history-summary,
-  .task-meta {
+  .task-meta,
+  .fleet-grid {
     grid-template-columns: 1fr;
   }
 

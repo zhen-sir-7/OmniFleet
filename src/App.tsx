@@ -1390,6 +1390,33 @@ export function App() {
           </div>
         )}
       </section>
+
+      {useRelayProxy && runners.length > 0 && (
+        <section className="panel fleet-panel">
+          <div className="section-heading">
+            <p className="eyebrow">05 / fleet</p>
+            <h2>Runner network</h2>
+          </div>
+          <div className="fleet-grid">
+            {runners.map((runner) => (
+              <div className="fleet-item" key={runner.id}>
+                <div className="fleet-head">
+                  <span className={runner.status === 'online' ? 'fleet-dot live' : 'fleet-dot'} />
+                  <strong>{runner.name}</strong>
+                  <small>{runner.status}</small>
+                </div>
+                <p>{runner.endpoint}</p>
+                <p className="fleet-caps">
+                  tools: {runner.tools.join(', ') || 'none'}
+                </p>
+                <p className="fleet-caps">
+                  caps: {runner.capabilities?.join(', ') || 'none'}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   )
 }
