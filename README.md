@@ -617,6 +617,7 @@ GET  /api/tasks/:id
 GET  /api/tasks/:id/events
 POST /api/tasks/:id/approve
 POST /api/tasks/:id/cancel
+POST /api/tasks/:id/retry
 POST /api/tasks/:id/apply
 ```
 
@@ -714,6 +715,7 @@ GET  /api/tasks/:runnerId/:taskId
 GET  /api/tasks/:runnerId/:taskId/events
 POST /api/tasks/:runnerId/:taskId/approve
 POST /api/tasks/:runnerId/:taskId/cancel
+POST /api/tasks/:runnerId/:taskId/retry
 POST /api/tasks/:runnerId/:taskId/apply
 ```
 

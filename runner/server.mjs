@@ -201,6 +201,7 @@ function publicTask(task) {
     tool: task.tool,
     status: task.status,
     createdAt: task.createdAt,
+    retryOf: task.retryOf ?? null,
     result: task.result ?? null,
     events: task.events,
   }
@@ -513,6 +514,25 @@ function serveStatic(req, res) {
   createReadStream(filePath).pipe(res)
 }
 
+function createTask(body, retryOf = null) {
+  const id = `task_${Date.now()}`
+  const task = {
+    id,
+    description: String(body.description ?? '').trim(),
+    runnerId: body.runnerId ?? config.runner.id,
+    projectId: body.projectId ?? config.projects[0].id,
+    tool: body.tool ?? config.runner.tools[0],
+    status: 'queued',
+    createdAt: new Date().toISOString(),
+    retryOf,
+    events: [],
+  }
+  tasks.set(id, task)
+  saveTasks()
+  setTimeout(() => runTask(id), 250)
+  return task
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
 
@@ -527,20 +547,7 @@ const server = createServer(async (req, res) => {
 
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
       const body = await readBody(req)
-      const id = `task_${Date.now()}`
-      const task = {
-        id,
-        description: String(body.description ?? '').trim(),
-        runnerId: body.runnerId ?? config.runner.id,
-        projectId: body.projectId ?? config.projects[0].id,
-        tool: body.tool ?? config.runner.tools[0],
-        status: 'queued',
-        createdAt: new Date().toISOString(),
-        events: [],
-      }
-      tasks.set(id, task)
-      saveTasks()
-      setTimeout(() => runTask(id), 250)
+      const task = createTask(body)
       return json(res, 201, publicTask(task))
     }
 
@@ -570,6 +577,14 @@ const server = createServer(async (req, res) => {
     if (cancelMatch && req.method === 'POST') {
       const cancelled = cancelTask(cancelMatch[1])
       return json(res, cancelled.status, cancelled.ok ? cancelled.task : { error: cancelled.summary })
+    }
+
+    const retryMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/retry$/)
+    if (retryMatch && req.method === 'POST') {
+      const original = tasks.get(retryMatch[1])
+      if (!original) return json(res, 404, { error: 'Task not found' })
+      const task = createTask(original, original.id)
+      return json(res, 201, publicTask(task))
     }
 
     const applyMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/apply$/)

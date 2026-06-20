@@ -52,6 +52,7 @@ type TaskRecord = {
   tool: string
   status: TaskState
   createdAt: string
+  retryOf?: string | null
   result: TaskResult | null
   routing?: {
     mode: string
@@ -151,7 +152,7 @@ export function App() {
   const logEvents = events.filter((event) => event.type === 'log')
   const diffLines = result?.diff ?? []
 
-  function taskPath(path: 'events' | 'approve' | 'apply' | 'cancel', id: string, runnerId = selectedRunner) {
+  function taskPath(path: 'events' | 'approve' | 'apply' | 'cancel' | 'retry', id: string, runnerId = selectedRunner) {
     if (useRelayProxy) return `/api/tasks/${runnerId}/${id}/${path}`
     return `/api/tasks/${id}/${path}`
   }
@@ -309,7 +310,7 @@ export function App() {
       if (event.type === 'state' && event.status) {
         setState(event.status)
         if (event.result) setResult(event.result)
-        if (event.status === 'review' || event.status === 'approved' || event.status === 'applied' || event.status === 'failed') {
+        if (event.status === 'review' || event.status === 'approved' || event.status === 'applied' || event.status === 'failed' || event.status === 'cancelled') {
           loadHistory()
           source.close()
         }
@@ -386,6 +387,43 @@ export function App() {
     setState(cancelled.status)
     if (cancelled.result) setResult(cancelled.result)
     loadHistory()
+  }
+
+  async function retryTask(id = taskId, runnerId = selectedRunner) {
+    if (!id || !runnerOnline) return
+
+    const response = await apiFetch(taskPath('retry', id, runnerId), { method: 'POST' })
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string }
+      setEvents((items) => [...items, { type: 'log', level: 'error', message: payload.error ?? 'failed to retry task' }])
+      return
+    }
+
+    const retried = (await response.json()) as { id: string; runnerId?: string }
+    const eventRunnerId = retried.runnerId ?? runnerId
+    setSelectedRunner(eventRunnerId)
+    setTaskId(retried.id)
+    setState('queued')
+    setEvents([])
+    setResult(null)
+    loadHistory()
+
+    const eventBase = useRelayProxy ? relayBase : runnerBase
+    const eventParams = new URLSearchParams({ token })
+    if (useRelayProxy && relayToken) eventParams.set('relayToken', relayToken)
+    const source = new EventSource(`${eventBase}${taskPath('events', retried.id, eventRunnerId)}?${eventParams.toString()}`)
+    source.onmessage = (message) => {
+      const event = JSON.parse(message.data) as TaskEvent
+      setEvents((items) => [...items, event])
+      if (event.type === 'state' && event.status) {
+        setState(event.status)
+        if (event.result) setResult(event.result)
+        if (event.status === 'review' || event.status === 'approved' || event.status === 'applied' || event.status === 'failed' || event.status === 'cancelled') {
+          loadHistory()
+          source.close()
+        }
+      }
+    }
   }
 
   function resetTask() {
@@ -659,6 +697,9 @@ export function App() {
             <button className="secondary" disabled={!['queued', 'running'].includes(state)} onClick={cancelTask}>
               Cancel task
             </button>
+            <button className="secondary" disabled={!taskId || ['queued', 'running'].includes(state)} onClick={() => retryTask()}>
+              Retry task
+            </button>
           </div>
 
           {state === 'approved' && (
@@ -696,6 +737,7 @@ export function App() {
                 key={item.id}
                 onClick={() => {
                   setTaskId(item.id)
+                  if (item.runnerId) setSelectedRunner(item.runnerId)
                   setState(item.status)
                   setResult(item.result)
                   setEvents([])
@@ -703,6 +745,7 @@ export function App() {
               >
                 <span>{item.status}</span>
                 <strong>{item.description || item.id}</strong>
+                {item.retryOf && <small>retry of {item.retryOf}</small>}
                 {item.routing && <small>{item.routing.mode}: {item.routing.selectedRunnerName}</small>}
                 <small>{item.runnerName ? `${item.runnerName} / ` : ''}{item.tool} / {new Date(item.createdAt).toLocaleString()}</small>
               </button>

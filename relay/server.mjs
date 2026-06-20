@@ -124,6 +124,7 @@ function publicTask(task) {
     tool: task.tool,
     status: task.status,
     createdAt: task.createdAt,
+    retryOf: task.retryOf ?? null,
     updatedAt: task.updatedAt,
     routing: task.routing ?? null,
     result: task.result ?? null,
@@ -139,6 +140,7 @@ function rememberTask(runner, task, metadata = {}) {
     tool: task.tool,
     status: task.status,
     createdAt: task.createdAt,
+    retryOf: task.retryOf ?? null,
     updatedAt: new Date().toISOString(),
     routing: metadata.routing ?? tasks.get(`${runner.id}:${task.id}`)?.routing ?? null,
     result: task.result ?? null,
@@ -160,6 +162,7 @@ function updateTaskFromStateEvent(runner, taskId, event) {
     tool: existing?.tool ?? 'unknown',
     status: event.status,
     createdAt: existing?.createdAt ?? new Date().toISOString(),
+    retryOf: existing?.retryOf ?? null,
     updatedAt: new Date().toISOString(),
     routing: existing?.routing ?? null,
     result: event.result ?? existing?.result ?? null,
@@ -463,6 +466,15 @@ const server = createServer(async (req, res) => {
       const runner = findRunner(cancelMatch[1])
       if (!runner) return json(res, 404, { error: 'Runner not found' })
       const proxied = await proxyJson(req, res, runner, `/api/tasks/${cancelMatch[2]}/cancel`, { method: 'POST' })
+      if (proxied.ok && proxied.data?.id) rememberTask(runner, proxied.data)
+      return
+    }
+
+    const retryMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/([^/]+)\/retry$/)
+    if (retryMatch && req.method === 'POST') {
+      const runner = findRunner(retryMatch[1])
+      if (!runner) return json(res, 404, { error: 'Runner not found' })
+      const proxied = await proxyJson(req, res, runner, `/api/tasks/${retryMatch[2]}/retry`, { method: 'POST' })
       if (proxied.ok && proxied.data?.id) rememberTask(runner, proxied.data)
       return
     }
