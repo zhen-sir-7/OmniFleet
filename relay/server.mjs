@@ -112,6 +112,8 @@ function publicRunner(runner) {
     lastProbeAt: runner.lastProbeAt ?? null,
     lastProbeOk: runner.lastProbeOk ?? false,
     lastProbeError: runner.lastProbeError ?? null,
+    queueLength: runner.queueLength ?? 0,
+    runningCount: runner.runningCount ?? 0,
   }
 }
 
@@ -230,13 +232,17 @@ function routeRunner(body) {
       const projectMatch = body.projectId
         ? projects.some((project) => normalizeName(project) === normalizeName(body.projectId))
         : true
-      const score = (toolMatch ? 10 : 0) + (projectMatch ? 10 : 0) + (runner.lastProbeOk ? 2 : 0)
+      const load = (runner.queueLength ?? 0) + (runner.runningCount ?? 0)
+      const loadScore = Math.max(0, 5 - load)
+      const score = (toolMatch ? 10 : 0) + (projectMatch ? 10 : 0) + (runner.lastProbeOk ? 2 : 0) + loadScore
       return {
         runner,
         score,
         toolMatch,
         projectMatch,
-        reason: `online runner matched project=${body.projectId ?? 'any'} and tool=${body.tool ?? 'any'}`,
+        load,
+        loadScore,
+        reason: `online runner matched project=${body.projectId ?? 'any'} and tool=${body.tool ?? 'any'} with load ${load}`,
       }
     })
 
@@ -261,6 +267,9 @@ function routeRunner(body) {
           projects: item.runner.projects ?? [],
           toolMatch: item.toolMatch,
           projectMatch: item.projectMatch,
+          load: item.load,
+          loadScore: item.loadScore,
+          score: item.score,
         })),
       },
     }
@@ -413,6 +422,8 @@ const server = createServer(async (req, res) => {
         lastProbeAt: previous?.lastProbeAt ?? null,
         lastProbeOk: previous?.lastProbeOk ?? false,
         lastProbeError: previous?.lastProbeError ?? null,
+        queueLength: typeof body.queueLength === 'number' ? body.queueLength : (previous?.queueLength ?? 0),
+        runningCount: typeof body.runningCount === 'number' ? body.runningCount : (previous?.runningCount ?? 0),
       }
       runners.set(runner.id, runner)
       saveRegistry()

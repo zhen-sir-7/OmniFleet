@@ -580,6 +580,8 @@ async function registerWithRelay() {
         tools: payload.tools,
         projects: payload.projects,
         capabilities: payload.capabilities,
+        queueLength: taskQueue.length,
+        runningCount: runningProcesses.size,
       }),
     })
   } catch (error) {
