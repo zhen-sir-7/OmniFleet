@@ -201,6 +201,13 @@ export function App() {
   }, [runnerOnline])
 
   useEffect(() => {
+    if (!useRelayProxy) return
+
+    const interval = window.setInterval(() => refreshFleet(), 30000)
+    return () => window.clearInterval(interval)
+  }, [useRelayProxy])
+
+  useEffect(() => {
     if (notifyCount === 0) return
     const reset = () => {
       setNotifyCount(0)
@@ -289,6 +296,19 @@ export function App() {
       loadProjectsForRunner(runner)
     }
     previewRoute()
+  }
+
+  async function refreshFleet() {
+    try {
+      const response = await fetch(`${relayBase}/api/runners`, {
+        headers: relayToken ? { 'X-OmniFleet-Relay-Token': relayToken } : {},
+      })
+      if (!response.ok) return
+      const relayRunners = (await response.json()) as Runner[]
+      setRunners(relayRunners)
+    } catch {
+      // Fleet refresh is best-effort.
+    }
   }
 
   async function loadRelayRunners() {
