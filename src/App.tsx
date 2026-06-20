@@ -102,6 +102,13 @@ const offlineTimeline = [
   'diff ready for human review',
 ]
 
+const toolCapabilityMap: Record<string, string> = {
+  opencode: 'hasGit, hasNode',
+  'build-check': 'hasNode',
+  'claude': 'hasGit, hasNode',
+  codex: 'hasGit, hasNode',
+}
+
 export function App() {
   const [task, setTask] = useState('Build this project through the local runner, stream logs, and wait for approval.')
   const [runners, setRunners] = useState<Runner[]>(fallbackRunners)
@@ -178,6 +185,13 @@ export function App() {
   useEffect(() => {
     previewRoute()
   }, [autoRoute, selectedProject, selectedTool])
+
+  useEffect(() => {
+    const inferred = toolCapabilityMap[selectedTool]
+    if (inferred && !requiredCaps) {
+      setRequiredCaps(inferred)
+    }
+  }, [selectedTool])
 
   useEffect(() => {
     if (!runnerOnline) return
@@ -1069,6 +1083,9 @@ export function App() {
                   <strong>Relay routing</strong>
                 </div>
                 <p>{routePreview}</p>
+                {currentRunner.capabilities && currentRunner.capabilities.length > 0 && (
+                  <p>caps: {currentRunner.capabilities.join(', ')}</p>
+                )}
               </>
             ) : (
               <>
