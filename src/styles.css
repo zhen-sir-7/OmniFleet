@@ -685,6 +685,37 @@ select {
   color: var(--accent-dark);
 }
 
+.log-viewer {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+}
+
+.log-viewer-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.log-viewer pre {
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 12px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--ink);
+  background: rgba(255, 252, 244, 0.82);
+}
+
 .history-empty {
   margin: 0;
   border: 1px solid var(--line);

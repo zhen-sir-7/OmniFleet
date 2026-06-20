@@ -119,6 +119,9 @@ export function App() {
   const [runnerOnline, setRunnerOnline] = useState(false)
   const [runnerUptime, setRunnerUptime] = useState<string | null>(null)
   const [runnerStats, setRunnerStats] = useState<Record<string, unknown> | null>(null)
+  const [relayStatsData, setRelayStatsData] = useState<Record<string, unknown> | null>(null)
+  const [logContent, setLogContent] = useState<string | null>(null)
+  const [logStatus, setLogStatus] = useState<string | null>(null)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [history, setHistory] = useState<TaskRecord[]>([])
   const [historyQuery, setHistoryQuery] = useState('')
@@ -422,6 +425,16 @@ export function App() {
       if (statsRes.ok) {
         setRunnerStats((await statsRes.json()) as Record<string, unknown>)
       }
+      if (useRelayProxy && relayToken) {
+        const relayStatsRes = await fetch(`${relayBase}/api/stats`, {
+          headers: { 'X-OmniFleet-Relay-Token': relayToken },
+        })
+        if (relayStatsRes.ok) {
+          setRelayStatsData((await relayStatsRes.json()) as Record<string, unknown>)
+        }
+      } else {
+        setRelayStatsData(null)
+      }
     } catch {
       setRunnerUptime(null)
     }
@@ -466,6 +479,17 @@ export function App() {
     setTaskId(null)
     setSelectedTaskDetail(null)
     setApplyError(null)
+
+    if (batchMode) {
+      const lines = task.split(/\r?\n/).filter(Boolean)
+      if (lines.length === 0) {
+        setEvents([{ type: 'log', level: 'error', message: 'Enter at least one task description in batch mode.' }])
+        return
+      }
+    } else if (!task.trim()) {
+      setEvents([{ type: 'log', level: 'error', message: 'Enter a task description before dispatching.' }])
+      return
+    }
 
     if (!runnerOnline) {
       runOfflineDemo()
@@ -694,6 +718,27 @@ export function App() {
     URL.revokeObjectURL(url)
   }
 
+  async function viewTaskLog() {
+    if (!taskId || !runnerOnline) return
+
+    try {
+      const response = await apiFetch(useRelayProxy ? `/api/tasks/${selectedRunner}/${taskId}/log` : `/api/tasks/${taskId}/log`)
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string }
+        throw new Error(payload.error ?? 'log not available')
+      }
+      const log = (await response.json()) as { events: TaskEvent[]; size: number }
+      setLogContent(log.events.map((event, index) => {
+        const prefix = String(index + 1).padStart(2, '0')
+        const msg = event.type === 'log' ? `[${event.level}] ${event.message}` : `[state] ${event.status ?? ''}`
+        return `${prefix}  ${msg}`
+      }).join('\n'))
+      setLogStatus(`${log.events.length} events (${log.size} bytes)`)
+    } catch (error) {
+      setLogStatus(error instanceof Error ? error.message : 'failed to load log')
+    }
+  }
+
   function resetTask() {
     setState('draft')
     setEvents([])
@@ -721,7 +766,13 @@ export function App() {
           </p>
         </div>
         <div className="hero-metrics" aria-label="System status">
-          <Metric label="runner" value={runnerOnline ? 'live' : 'demo'} />
+          <Metric label={relayStatsData ? 'relay' : 'runner'} value={runnerOnline ? 'live' : 'demo'} />
+          <Metric
+            label="runners"
+            value={relayStatsData
+              ? String((relayStatsData.runners as Record<string, number>).registered ?? 0)
+              : String(currentRunner.tools.length)}
+          />
           <Metric
             label="tasks"
             value={runnerStats
@@ -1112,6 +1163,9 @@ export function App() {
             <button className="secondary" disabled={!taskId} onClick={exportTask}>
               Export JSON
             </button>
+            <button className="secondary" disabled={!taskId} onClick={viewTaskLog}>
+              View log
+            </button>
           </div>
 
           {state === 'approved' && (
@@ -1124,6 +1178,16 @@ export function App() {
 
           {applyError && (
             <p className="approval-note error-note">{applyError}</p>
+          )}
+
+          {logContent && (
+            <div className="log-viewer">
+              <div className="log-viewer-head">
+                <span>Task log</span>
+                <span>{logStatus}</span>
+              </div>
+              <pre>{logContent}</pre>
+            </div>
           )}
         </aside>
       </section>
