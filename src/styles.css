@@ -604,6 +604,16 @@ select {
   color: var(--muted);
 }
 
+.diff-stat {
+  white-space: pre-wrap;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  border-top: 1px solid var(--soft-line);
+  border-bottom: 1px solid var(--soft-line);
+  padding: 8px 0;
+  margin: 10px 0;
+}
+
 .approval-note {
   margin: 16px 0 0;
   border: 1px solid var(--line);

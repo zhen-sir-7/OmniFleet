@@ -327,6 +327,19 @@ async function collectGit(project) {
   }
 }
 
+async function collectWorktreeChanges(project) {
+  const isRepo = await runShell('git rev-parse --is-inside-work-tree', { cwd: project.absolutePath })
+  if (!isRepo.ok) return { changedFiles: [], stat: 'not a git repository' }
+
+  const nameOnly = await runShell('git diff --name-only', { cwd: project.absolutePath })
+  const stat = await runShell('git diff --stat', { cwd: project.absolutePath })
+
+  return {
+    changedFiles: nameOnly.stdout.split(/\r?\n/).filter(Boolean).slice(0, 60),
+    stat: stat.stdout.trim() || 'no changes',
+  }
+}
+
 function shellQuote(path) {
   return `"${String(path).replace(/"/g, '\\"')}"`
 }
@@ -465,6 +478,8 @@ function createAdapters() {
         })
 
         const git = await collectGit({ ...project, absolutePath: workspace.path })
+        const changes = await collectWorktreeChanges({ ...project, absolutePath: workspace.path })
+        sendEvent(taskId, { type: 'log', level: 'info', message: `${changes.changedFiles.length} file(s) modified in worktree` })
         return {
           ok: run.ok,
           command: 'opencode run',
@@ -473,6 +488,8 @@ function createAdapters() {
           worktreeBranch: workspace.branch,
           agentGitStatus: git.status,
           agentDiff: git.diff,
+          changedFiles: changes.changedFiles,
+          changeStat: changes.stat,
           summary: run.ok
             ? 'opencode completed inside an isolated worktree. Review the agent diff before applying anything to the main workspace.'
             : `opencode exited with code ${run.code}. Review logs and isolated worktree state before continuing.`,

@@ -34,6 +34,8 @@ type TaskResult = {
   agentGitStatus?: string
   applied?: boolean
   appliedAt?: string
+  changedFiles?: string[]
+  changeStat?: string
 }
 
 type TaskEvent = {
@@ -908,6 +910,10 @@ export function App() {
                   {result.worktreeBranch && <p>worktree branch: {result.worktreeBranch}</p>}
                   {result.worktreePath && <p>worktree path: {result.worktreePath}</p>}
                   {result.agentGitStatus && <p>agent status: {result.agentGitStatus}</p>}
+                  {result.changeStat && <p className="diff-stat">{result.changeStat}</p>}
+                  {result.changedFiles && result.changedFiles.length > 0 && (
+                    <p>modified: {result.changedFiles.join(', ')}</p>
+                  )}
                   {result.appliedAt && <p>applied at: {result.appliedAt}</p>}
                   {diffLines.map((line) => <p key={line}>{line}</p>)}
                 </>
