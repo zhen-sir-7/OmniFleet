@@ -161,6 +161,9 @@ export function App() {
     localStorage.setItem('omnifleet-tool', selectedTool)
     localStorage.setItem('omnifleet-proxy', String(useRelayProxy))
     localStorage.setItem('omnifleet-autoroute', String(autoRoute))
+    if (useRelayProxy && relayToken) {
+      saveSessionToRelay()
+    }
   }, [selectedRunner, selectedProject, selectedTool, useRelayProxy, autoRoute])
 
   useEffect(() => {
@@ -315,6 +318,37 @@ export function App() {
     previewRoute()
   }
 
+  async function saveSessionToRelay() {
+    try {
+      await fetch(`${relayBase}/api/session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-OmniFleet-Relay-Token': relayToken,
+        },
+        body: JSON.stringify({ selectedRunner, selectedProject, selectedTool, autoRoute }),
+      })
+    } catch {
+      // Best-effort session sync.
+    }
+  }
+
+  async function loadSessionFromRelay() {
+    try {
+      const response = await fetch(`${relayBase}/api/session`, {
+        headers: { 'X-OmniFleet-Relay-Token': relayToken },
+      })
+      if (!response.ok) return
+      const session = (await response.json()) as { selectedRunner?: string; selectedProject?: string; selectedTool?: string; autoRoute?: boolean }
+      if (session.selectedRunner) setSelectedRunner(session.selectedRunner)
+      if (session.selectedProject) setSelectedProject(session.selectedProject)
+      if (session.selectedTool) setSelectedTool(session.selectedTool)
+      if (typeof session.autoRoute === 'boolean') setAutoRoute(session.autoRoute)
+    } catch {
+      // Best-effort session load.
+    }
+  }
+
   async function refreshFleet() {
     try {
       const response = await fetch(`${relayBase}/api/runners`, {
@@ -349,6 +383,7 @@ export function App() {
       setAutoRoute(true)
       setRelayStatus(`loaded ${relayRunners.length} runner(s) from relay`)
       previewRoute()
+      loadSessionFromRelay()
     } catch (error) {
       setRelayStatus(error instanceof Error ? error.message : 'relay unavailable')
     }

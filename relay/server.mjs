@@ -9,6 +9,7 @@ const stateDir = resolve(root, '.omnifleet')
 const relayStorePath = resolve(stateDir, 'relay.json')
 const registryPath = resolve(stateDir, 'relay-runners.json')
 const taskStorePath = resolve(stateDir, 'relay-tasks.json')
+const sessionStorePath = resolve(stateDir, 'relay-session.json')
 const port = Number(process.env.OMNIFLEET_RELAY_PORT ?? 8790)
 const relay = loadRelay()
 const runners = loadRegistry()
@@ -382,6 +383,24 @@ const server = createServer(async (req, res) => {
 
   try {
     if (url.pathname === '/api/health') return json(res, 200, { ok: true, role: 'relay', tokenRequired: true, relay: { id: relay.id, name: relay.name } })
+
+    if (url.pathname === '/api/session' && req.method === 'GET') {
+      try {
+        if (!existsSync(sessionStorePath)) return json(res, 200, {})
+        const session = JSON.parse(readFileSync(sessionStorePath, 'utf8'))
+        return json(res, 200, session)
+      } catch {
+        return json(res, 200, {})
+      }
+    }
+
+    if (url.pathname === '/api/session' && req.method === 'POST') {
+      const body = await readBody(req)
+      mkdirSync(stateDir, { recursive: true })
+      writeFileSync(sessionStorePath, JSON.stringify(body, null, 2), 'utf8')
+      return json(res, 200, { ok: true })
+    }
+
     if (url.pathname.startsWith('/api/') && !isRelayAuthorized(req, url)) return unauthorized(res)
 
     if (url.pathname === '/api/stats' && req.method === 'GET') {
