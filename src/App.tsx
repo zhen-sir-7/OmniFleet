@@ -995,7 +995,7 @@ export function App() {
               >
                 {runners.map((runner) => (
                   <option key={runner.id} value={runner.id}>
-                    {runner.name}
+                    {runner.name}{runner.endpoint ? ` (${runner.endpoint})` : ''}
                   </option>
                 ))}
               </select>
