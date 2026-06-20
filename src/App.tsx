@@ -61,6 +61,10 @@ type TaskRecord = {
   } | null
 }
 
+type TaskDetail = TaskRecord & {
+  events?: TaskEvent[]
+}
+
 const apiBase = import.meta.env.DEV ? 'http://localhost:8787' : ''
 const defaultRelayUrl = 'http://localhost:8790'
 
@@ -348,6 +352,26 @@ export function App() {
       setHistory((await response.json()) as TaskRecord[])
     } catch {
       setHistory([])
+    }
+  }
+
+  async function openHistoryTask(item: TaskRecord) {
+    try {
+      const runnerId = item.runnerId ?? selectedRunner
+      const response = await apiFetch(useRelayProxy ? `/api/tasks/${runnerId}/${item.id}` : `/api/tasks/${item.id}`)
+      if (!response.ok) throw new Error('failed to load task detail')
+      const detail = (await response.json()) as TaskDetail
+      setTaskId(detail.id)
+      if (detail.runnerId) setSelectedRunner(detail.runnerId)
+      setState(detail.status)
+      setResult(detail.result)
+      setEvents(detail.events ?? [])
+    } catch (error) {
+      setTaskId(item.id)
+      if (item.runnerId) setSelectedRunner(item.runnerId)
+      setState(item.status)
+      setResult(item.result)
+      setEvents([{ type: 'log', level: 'error', message: error instanceof Error ? error.message : 'failed to load task detail' }])
     }
   }
 
@@ -887,13 +911,7 @@ export function App() {
               <button
                 className="history-item"
                 key={item.id}
-                onClick={() => {
-                  setTaskId(item.id)
-                  if (item.runnerId) setSelectedRunner(item.runnerId)
-                  setState(item.status)
-                  setResult(item.result)
-                  setEvents([])
-                }}
+                onClick={() => openHistoryTask(item)}
               >
                 <span>{item.status}</span>
                 <strong>{item.description || item.id}</strong>
