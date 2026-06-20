@@ -1399,7 +1399,11 @@ export function App() {
           </div>
           <div className="fleet-grid">
             {runners.map((runner) => (
-              <div className="fleet-item" key={runner.id}>
+              <button
+                className="fleet-item"
+                key={runner.id}
+                onClick={() => selectRunner(runner.id)}
+              >
                 <div className="fleet-head">
                   <span className={runner.status === 'online' ? 'fleet-dot live' : 'fleet-dot'} />
                   <strong>{runner.name}</strong>
@@ -1412,7 +1416,7 @@ export function App() {
                 <p className="fleet-caps">
                   caps: {runner.capabilities?.join(', ') || 'none'}
                 </p>
-              </div>
+              </button>
             ))}
           </div>
         </section>
