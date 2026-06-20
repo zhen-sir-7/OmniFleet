@@ -171,6 +171,11 @@ export function App() {
     const matchesStatus = historyStatus === 'all' || item.status === historyStatus
     return matchesQuery && matchesStatus
   })
+  const historyCounts = history.reduce<Record<string, number>>((counts, item) => {
+    counts[item.status] = (counts[item.status] ?? 0) + 1
+    counts.total = (counts.total ?? 0) + 1
+    return counts
+  }, { total: 0 })
 
   function taskPath(path: 'events' | 'approve' | 'apply' | 'cancel' | 'retry', id: string, runnerId = selectedRunner) {
     if (useRelayProxy) return `/api/tasks/${runnerId}/${id}/${path}`
@@ -952,23 +957,37 @@ export function App() {
         </div>
 
         {history.length > 0 && (
-          <div className="history-filters">
-            <input
-              value={historyQuery}
-              placeholder="Filter by task, runner, tool, description"
-              onChange={(event) => setHistoryQuery(event.target.value)}
-            />
-            <select value={historyStatus} onChange={(event) => setHistoryStatus(event.target.value as TaskState | 'all')}>
-              <option value="all">All statuses</option>
-              <option value="queued">Queued</option>
-              <option value="running">Running</option>
-              <option value="review">Review</option>
-              <option value="approved">Approved</option>
-              <option value="applied">Applied</option>
-              <option value="failed">Failed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
+          <>
+            <div className="history-summary">
+              {['total', 'queued', 'running', 'review', 'approved', 'applied', 'failed', 'cancelled'].map((status) => (
+                <button
+                  className={historyStatus === status || (status === 'total' && historyStatus === 'all') ? 'summary-chip active' : 'summary-chip'}
+                  key={status}
+                  onClick={() => setHistoryStatus(status === 'total' ? 'all' : (status as TaskState))}
+                >
+                  <span>{status}</span>
+                  <strong>{historyCounts[status] ?? 0}</strong>
+                </button>
+              ))}
+            </div>
+            <div className="history-filters">
+              <input
+                value={historyQuery}
+                placeholder="Filter by task, runner, tool, description"
+                onChange={(event) => setHistoryQuery(event.target.value)}
+              />
+              <select value={historyStatus} onChange={(event) => setHistoryStatus(event.target.value as TaskState | 'all')}>
+                <option value="all">All statuses</option>
+                <option value="queued">Queued</option>
+                <option value="running">Running</option>
+                <option value="review">Review</option>
+                <option value="approved">Approved</option>
+                <option value="applied">Applied</option>
+                <option value="failed">Failed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </>
         )}
 
         {history.length === 0 ? (
