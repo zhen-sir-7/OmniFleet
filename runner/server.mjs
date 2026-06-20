@@ -646,6 +646,27 @@ const server = createServer(async (req, res) => {
 
   try {
     if (url.pathname === '/api/health') return json(res, 200, { ok: true, tokenRequired: true, runner: { id: device.id, name: device.name, startedAt: runnerStartedAt, uptimeMs: Date.now() - Date.parse(runnerStartedAt) } })
+
+    if (url.pathname === '/api/stats' && req.method === 'GET') {
+      const allTasks = Array.from(tasks.values())
+      const byStatus = {}
+      for (const task of allTasks) {
+        byStatus[task.status] = (byStatus[task.status] ?? 0) + 1
+      }
+      const memUsage = process.memoryUsage()
+      return json(res, 200, {
+        tasks: { total: allTasks.length, ...byStatus },
+        runningProcesses: runningProcesses.size,
+        memory: {
+          heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+        },
+        uptimeMs: Date.now() - Date.parse(runnerStartedAt),
+        platform: process.platform,
+        nodeVersion: process.version,
+      })
+    }
+
     if (url.pathname.startsWith('/api/') && !isAuthorized(req, url)) return unauthorized(res)
 
     if (url.pathname === '/api/runners') return json(res, 200, [await runnerPayload()])

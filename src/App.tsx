@@ -115,6 +115,7 @@ export function App() {
   const [selectedTaskDetail, setSelectedTaskDetail] = useState<TaskDetail | null>(null)
   const [runnerOnline, setRunnerOnline] = useState(false)
   const [runnerUptime, setRunnerUptime] = useState<string | null>(null)
+  const [runnerStats, setRunnerStats] = useState<Record<string, unknown> | null>(null)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [history, setHistory] = useState<TaskRecord[]>([])
   const [historyQuery, setHistoryQuery] = useState('')
@@ -375,17 +376,23 @@ export function App() {
   async function fetchHealth() {
     try {
       const base = useRelayProxy ? relayBase : runnerBase
-      const response = await fetch(`${base}/api/health`, {
-        headers: {
-          ...(useRelayProxy && relayToken ? { 'X-OmniFleet-Relay-Token': relayToken } : {}),
-          ...(token ? { 'X-OmniFleet-Token': token } : {}),
-        },
-      })
-      if (response.ok) {
-        const health = (await response.json()) as { runner?: { startedAt?: string; uptimeMs?: number } }
+      const [healthRes, statsRes] = await Promise.all([
+        fetch(`${base}/api/health`, {
+          headers: {
+            ...(useRelayProxy && relayToken ? { 'X-OmniFleet-Relay-Token': relayToken } : {}),
+            ...(token ? { 'X-OmniFleet-Token': token } : {}),
+          },
+        }),
+        apiFetch('/api/stats'),
+      ])
+      if (healthRes.ok) {
+        const health = (await healthRes.json()) as { runner?: { startedAt?: string; uptimeMs?: number } }
         if (health.runner?.startedAt) {
           setRunnerUptime(new Date(health.runner.startedAt).toLocaleString())
         }
+      }
+      if (statsRes.ok) {
+        setRunnerStats((await statsRes.json()) as Record<string, unknown>)
       }
     } catch {
       setRunnerUptime(null)
@@ -668,7 +675,18 @@ export function App() {
         </div>
         <div className="hero-metrics" aria-label="System status">
           <Metric label="runner" value={runnerOnline ? 'live' : 'demo'} />
-          <Metric label="tools" value={String(currentRunner.tools.length)} />
+          <Metric
+            label="tasks"
+            value={runnerStats
+              ? String((runnerStats.tasks as Record<string, number>).total ?? 0)
+              : '-'}
+          />
+          <Metric
+            label="memory"
+            value={runnerStats
+              ? `${(runnerStats.memory as Record<string, number>).heapUsed}MB`
+              : '-'}
+          />
           <Metric label="policy" value="locked" />
         </div>
       </header>
