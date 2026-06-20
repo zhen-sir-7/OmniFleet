@@ -118,6 +118,7 @@ export function App() {
   const [selectedTaskDetail, setSelectedTaskDetail] = useState<TaskDetail | null>(null)
   const [runnerOnline, setRunnerOnline] = useState(false)
   const [runnerUptime, setRunnerUptime] = useState<string | null>(null)
+  const [latencyMs, setLatencyMs] = useState<number | null>(null)
   const [runnerStats, setRunnerStats] = useState<Record<string, unknown> | null>(null)
   const [relayStatsData, setRelayStatsData] = useState<Record<string, unknown> | null>(null)
   const [logContent, setLogContent] = useState<string | null>(null)
@@ -408,6 +409,7 @@ export function App() {
   async function fetchHealth() {
     try {
       const base = useRelayProxy ? relayBase : runnerBase
+      const started = Date.now()
       const [healthRes, statsRes] = await Promise.all([
         fetch(`${base}/api/health`, {
           headers: {
@@ -417,6 +419,7 @@ export function App() {
         }),
         apiFetch('/api/stats'),
       ])
+      setLatencyMs(Date.now() - started)
       if (healthRes.ok) {
         const health = (await healthRes.json()) as { runner?: { startedAt?: string; uptimeMs?: number } }
         if (health.runner?.startedAt) {
@@ -794,7 +797,7 @@ export function App() {
           </div>
 
           <div className={runnerOnline ? 'connection live' : 'connection demo'}>
-            {runnerOnline ? `Local runner connected${runnerUptime ? ' since ' + runnerUptime : ''}` : 'Runner offline: using demo mode'}
+            {runnerOnline ? `Local runner connected${latencyMs !== null ? ` (${latencyMs}ms)` : ''}${runnerUptime ? ' since ' + runnerUptime : ''}` : 'Runner offline: using demo mode'}
           </div>
 
           <label className="field-label" htmlFor="token-input">
