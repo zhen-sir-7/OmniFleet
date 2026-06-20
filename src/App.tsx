@@ -950,6 +950,20 @@ export function App() {
             }}
             disabled={state === 'running' || state === 'queued'}
           />
+          {history.length > 0 && (
+            <div className="suggestions">
+              {[...new Set(history.map((item) => item.description).filter(Boolean))].slice(0, 6).map((description) => (
+                <button
+                  className="suggestion-chip"
+                  key={description}
+                  onClick={() => setTask(description)}
+                  disabled={state === 'running' || state === 'queued'}
+                >
+                  {description}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="templates">
             {[

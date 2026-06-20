@@ -285,6 +285,24 @@ select {
   text-align: left;
 }
 
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.suggestion-chip {
+  min-height: 28px;
+  padding: 4px 8px;
+  color: var(--ink);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  text-align: left;
+}
+
 .selector-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
