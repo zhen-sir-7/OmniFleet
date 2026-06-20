@@ -266,6 +266,25 @@ select {
   border-radius: 0;
 }
 
+.templates {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.template-chip {
+  min-height: 34px;
+  padding: 6px 10px;
+  background: rgba(255, 252, 244, 0.62);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  text-align: left;
+}
+
 .selector-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

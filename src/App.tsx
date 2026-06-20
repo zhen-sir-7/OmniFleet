@@ -783,6 +783,26 @@ export function App() {
             disabled={state === 'running' || state === 'queued'}
           />
 
+          <div className="templates">
+            {[
+              'Build the project and show errors',
+              'Run tests and report failures',
+              'Check for lint or type errors',
+              'Review recent changes and suggest improvements',
+              'Add inline documentation for new functions',
+              'Refactor selected code to reduce duplication',
+            ].map((template) => (
+              <button
+                className="template-chip"
+                key={template}
+                onClick={() => setTask(template)}
+                disabled={state === 'running' || state === 'queued'}
+              >
+                {template}
+              </button>
+            ))}
+          </div>
+
           <div className="selector-grid">
             <label>
               <span>Runner</span>
