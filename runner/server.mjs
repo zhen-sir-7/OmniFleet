@@ -682,6 +682,7 @@ const server = createServer(async (req, res) => {
       const memUsage = process.memoryUsage()
       return json(res, 200, {
         tasks: { total: allTasks.length, ...byStatus },
+        queueLength: taskQueue.length,
         runningProcesses: runningProcesses.size,
         memory: {
           heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),

@@ -371,6 +371,20 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/api/health') return json(res, 200, { ok: true, role: 'relay', tokenRequired: true, relay: { id: relay.id, name: relay.name } })
     if (url.pathname.startsWith('/api/') && !isRelayAuthorized(req, url)) return unauthorized(res)
 
+    if (url.pathname === '/api/stats' && req.method === 'GET') {
+      const memUsage = process.memoryUsage()
+      return json(res, 200, {
+        runners: { registered: runners.size },
+        tasks: { total: tasks.size },
+        memory: {
+          heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+        },
+        platform: process.platform,
+        nodeVersion: process.version,
+      })
+    }
+
     if (url.pathname === '/api/runners' && req.method === 'GET') {
       const items = Array.from(runners.values())
         .map((runner) => ({
