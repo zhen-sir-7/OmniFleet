@@ -587,6 +587,17 @@ const server = createServer(async (req, res) => {
       return json(res, 201, publicTask(task))
     }
 
+    const exportMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/export$/)
+    if (exportMatch && req.method === 'GET') {
+      const task = tasks.get(exportMatch[1])
+      if (!task) return json(res, 404, { error: 'Task not found' })
+      return json(res, 200, {
+        exportedAt: new Date().toISOString(),
+        runner: await runnerPayload(),
+        task,
+      })
+    }
+
     const applyMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/apply$/)
     if (applyMatch && req.method === 'POST') {
       const applied = await applyTaskResult(applyMatch[1])

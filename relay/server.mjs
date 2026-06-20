@@ -479,6 +479,13 @@ const server = createServer(async (req, res) => {
       return
     }
 
+    const exportMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/([^/]+)\/export$/)
+    if (exportMatch && req.method === 'GET') {
+      const runner = findRunner(exportMatch[1])
+      if (!runner) return json(res, 404, { error: 'Runner not found' })
+      return proxyJson(req, res, runner, `/api/tasks/${exportMatch[2]}/export`)
+    }
+
     const applyMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/([^/]+)\/apply$/)
     if (applyMatch && req.method === 'POST') {
       const runner = findRunner(applyMatch[1])

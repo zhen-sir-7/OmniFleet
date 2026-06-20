@@ -426,6 +426,26 @@ export function App() {
     }
   }
 
+  async function exportTask() {
+    if (!taskId || !runnerOnline) return
+
+    const response = await apiFetch(useRelayProxy ? `/api/tasks/${selectedRunner}/${taskId}/export` : `/api/tasks/${taskId}/export`)
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string }
+      setEvents((items) => [...items, { type: 'log', level: 'error', message: payload.error ?? 'failed to export task' }])
+      return
+    }
+
+    const payload = await response.json()
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `omnifleet-${taskId}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   function resetTask() {
     setState('draft')
     setEvents([])
@@ -699,6 +719,9 @@ export function App() {
             </button>
             <button className="secondary" disabled={!taskId || ['queued', 'running'].includes(state)} onClick={() => retryTask()}>
               Retry task
+            </button>
+            <button className="secondary" disabled={!taskId} onClick={exportTask}>
+              Export JSON
             </button>
           </div>
 
