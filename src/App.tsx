@@ -451,8 +451,8 @@ export function App() {
   }
 
   async function openHistoryTask(item: TaskRecord) {
+    const runnerId = item.runnerId ?? selectedRunner
     try {
-      const runnerId = item.runnerId ?? selectedRunner
       const response = await apiFetch(useRelayProxy ? `/api/tasks/${runnerId}/${item.id}` : `/api/tasks/${item.id}`)
       if (!response.ok) throw new Error('failed to load task detail')
       const detail = (await response.json()) as TaskDetail
@@ -469,6 +469,35 @@ export function App() {
       setResult(item.result)
       setSelectedTaskDetail(item)
       setEvents([{ type: 'log', level: 'error', message: error instanceof Error ? error.message : 'failed to load task detail' }])
+    }
+
+    if (item.status === 'queued' || item.status === 'running') {
+      connectEventStream(item.id, runnerId)
+    }
+  }
+
+  function connectEventStream(tId: string, rId = selectedRunner) {
+    const eventRunnerId = rId
+    const eventBase = useRelayProxy ? relayBase : runnerBase
+    const eventParams = new URLSearchParams({ token })
+    if (useRelayProxy && relayToken) eventParams.set('relayToken', relayToken)
+    const source = new EventSource(`${eventBase}${taskPath('events', tId, eventRunnerId)}?${eventParams.toString()}`)
+    source.onmessage = (message) => {
+      const event = JSON.parse(message.data) as TaskEvent
+      setEvents((items) => [...items, event])
+      if (event.type === 'state' && event.status) {
+        setState(event.status)
+        if (event.result) setResult(event.result)
+        setSelectedTaskDetail((detail) => detail ? { ...detail, status: event.status!, result: event.result ?? detail.result } : detail)
+        if (event.status === 'review' || event.status === 'approved' || event.status === 'applied' || event.status === 'failed' || event.status === 'cancelled') {
+          loadHistory()
+          source.close()
+        }
+      }
+    }
+    source.onerror = () => {
+      setEvents((items) => [...items, { type: 'log', level: 'error', message: 'event stream disconnected' }])
+      source.close()
     }
   }
 
@@ -555,30 +584,7 @@ export function App() {
       events: [],
     })
     loadHistory()
-    const eventBase = useRelayProxy ? relayBase : runnerBase
-    const eventParams = new URLSearchParams({ token })
-    if (useRelayProxy && relayToken) eventParams.set('relayToken', relayToken)
-    const source = new EventSource(`${eventBase}${taskPath('events', created.id, eventRunnerId)}?${eventParams.toString()}`)
-
-    source.onmessage = (message) => {
-      const event = JSON.parse(message.data) as TaskEvent
-      setEvents((items) => [...items, event])
-
-      if (event.type === 'state' && event.status) {
-        setState(event.status)
-        if (event.result) setResult(event.result)
-        setSelectedTaskDetail((detail) => detail ? { ...detail, status: event.status!, result: event.result ?? detail.result } : detail)
-        if (event.status === 'review' || event.status === 'approved' || event.status === 'applied' || event.status === 'failed' || event.status === 'cancelled') {
-          loadHistory()
-          source.close()
-        }
-      }
-    }
-
-    source.onerror = () => {
-      setEvents((items) => [...items, { type: 'log', level: 'error', message: 'event stream disconnected' }])
-      source.close()
-    }
+    connectEventStream(created.id, eventRunnerId)
   }
 
   function runOfflineDemo() {
@@ -678,24 +684,7 @@ export function App() {
       events: [],
     })
     loadHistory()
-
-    const eventBase = useRelayProxy ? relayBase : runnerBase
-    const eventParams = new URLSearchParams({ token })
-    if (useRelayProxy && relayToken) eventParams.set('relayToken', relayToken)
-    const source = new EventSource(`${eventBase}${taskPath('events', retried.id, eventRunnerId)}?${eventParams.toString()}`)
-    source.onmessage = (message) => {
-      const event = JSON.parse(message.data) as TaskEvent
-      setEvents((items) => [...items, event])
-      if (event.type === 'state' && event.status) {
-        setState(event.status)
-        if (event.result) setResult(event.result)
-        setSelectedTaskDetail((detail) => detail ? { ...detail, status: event.status!, result: event.result ?? detail.result } : detail)
-        if (event.status === 'review' || event.status === 'approved' || event.status === 'applied' || event.status === 'failed' || event.status === 'cancelled') {
-          loadHistory()
-          source.close()
-        }
-      }
-    }
+    connectEventStream(retried.id, eventRunnerId)
   }
 
   async function exportTask() {
