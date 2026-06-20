@@ -135,6 +135,8 @@ export function App() {
   const [newProjectCommands, setNewProjectCommands] = useState('npm run build')
   const [newProjectDefaultCommand, setNewProjectDefaultCommand] = useState('npm run build')
   const [projectStatus, setProjectStatus] = useState<string | null>(null)
+  const [worktrees, setWorktrees] = useState<{ taskId: string; path: string; taskStatus: string }[]>([])
+  const [worktreeStatus, setWorktreeStatus] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadRunner() {
@@ -340,6 +342,29 @@ export function App() {
       if (useRelayProxy) await loadRelayRunners()
     } catch (error) {
       setProjectStatus(error instanceof Error ? error.message : 'failed to unregister project')
+    }
+  }
+
+  async function fetchWorktrees() {
+    try {
+      const response = await apiFetch('/api/worktrees')
+      if (!response.ok) throw new Error('failed to fetch worktrees')
+      setWorktrees((await response.json()) as { taskId: string; path: string; taskStatus: string }[])
+      setWorktreeStatus(null)
+    } catch (error) {
+      setWorktreeStatus(error instanceof Error ? error.message : 'failed to fetch worktrees')
+    }
+  }
+
+  async function cleanupWorktrees() {
+    try {
+      const response = await apiFetch('/api/worktrees/cleanup', { method: 'POST' })
+      if (!response.ok) throw new Error('failed to clean up worktrees')
+      const result = (await response.json()) as { cleaned: number }
+      setWorktreeStatus(`cleaned ${result.cleaned} worktree(s)`)
+      fetchWorktrees()
+    } catch (error) {
+      setWorktreeStatus(error instanceof Error ? error.message : 'failed to clean up worktrees')
     }
   }
 
@@ -704,6 +729,12 @@ export function App() {
               : '-'}
           />
           <Metric
+            label="avg time"
+            value={runnerStats?.timing
+              ? `${Math.round((runnerStats.timing as Record<string, number>).avgMs / 1000)}s`
+              : '-'}
+          />
+          <Metric
             label="memory"
             value={runnerStats
               ? `${(runnerStats.memory as Record<string, number>).heapUsed}MB`
@@ -940,6 +971,32 @@ export function App() {
               Unregister selected project
             </button>
             {projectStatus && <p className="token-hint neutral-hint">{projectStatus}</p>}
+          </div>
+
+          <div className="worktree-section">
+            <p className="field-label">Runner worktrees</p>
+            <div className="token-row">
+              <button className="secondary compact" onClick={fetchWorktrees} disabled={!runnerOnline}>
+                List worktrees
+              </button>
+              <button className="secondary compact" onClick={cleanupWorktrees} disabled={!runnerOnline}>
+                Cleanup completed
+              </button>
+            </div>
+            {worktreeStatus && <p className="token-hint neutral-hint">{worktreeStatus}</p>}
+            {worktrees.length > 0 && (
+              <div className="worktree-list">
+                {worktrees.map((item) => (
+                  <div className="worktree-item" key={item.taskId}>
+                    <span>{item.taskStatus}</span>
+                    <code>{item.taskId}</code>
+                  </div>
+                ))}
+              </div>
+            )}
+            {worktrees.length === 0 && (
+              <p className="history-empty">No worktrees found. Worktrees are created when opencode tasks execute.</p>
+            )}
           </div>
 
           <div className="actions">

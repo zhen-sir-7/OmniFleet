@@ -613,6 +613,7 @@ async function runTask(taskId) {
     status: 'review',
     result: {
       ...run,
+      completedAt: new Date().toISOString(),
       gitStatus: git.status,
       gitAvailable: git.available,
       diff: resultDiff,
@@ -714,12 +715,21 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/api/stats' && req.method === 'GET') {
       const allTasks = Array.from(tasks.values())
       const byStatus = {}
+      let totalDurationMs = 0
+      let completedCount = 0
       for (const task of allTasks) {
         byStatus[task.status] = (byStatus[task.status] ?? 0) + 1
+        if (task.result?.completedAt) {
+          totalDurationMs += Date.parse(task.result.completedAt) - Date.parse(task.createdAt)
+          completedCount += 1
+        }
       }
       const memUsage = process.memoryUsage()
       return json(res, 200, {
         tasks: { total: allTasks.length, ...byStatus },
+        timing: completedCount > 0
+          ? { completedCount, avgMs: Math.round(totalDurationMs / completedCount) }
+          : null,
         queueLength: taskQueue.length,
         runningProcesses: runningProcesses.size,
         memory: {
