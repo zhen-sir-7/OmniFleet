@@ -994,6 +994,7 @@ export function App() {
             />
             <button className="secondary compact" onClick={saveRelayToken}>Save</button>
           </div>
+          {useRelayProxy && !relayToken && <p className="token-hint">Paste relay token from .omnifleet/relay.json</p>}
 
           <label className="proxy-toggle">
             <input
