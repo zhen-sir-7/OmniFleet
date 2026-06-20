@@ -157,6 +157,13 @@ export function App() {
     loadRunner()
   }, [token])
 
+  useEffect(() => {
+    if (!runnerOnline) return
+
+    const interval = window.setInterval(() => loadHistory(), 15000)
+    return () => window.clearInterval(interval)
+  }, [runnerOnline])
+
   const currentRunner = runners.find((runner) => runner.id === selectedRunner) ?? runners[0]
   const currentProject = projects.find((project) => project.id === selectedProject) ?? projects[0]
   const runnerBase = currentRunner.endpoint ?? apiBase
