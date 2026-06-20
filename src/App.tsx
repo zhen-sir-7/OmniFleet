@@ -113,9 +113,9 @@ export function App() {
   const [task, setTask] = useState('Build this project through the local runner, stream logs, and wait for approval.')
   const [runners, setRunners] = useState<Runner[]>(fallbackRunners)
   const [projects, setProjects] = useState<Project[]>(fallbackProjects)
-  const [selectedRunner, setSelectedRunner] = useState(fallbackRunners[0].id)
-  const [selectedProject, setSelectedProject] = useState(fallbackProjects[0].id)
-  const [selectedTool, setSelectedTool] = useState('mock-agent')
+  const [selectedRunner, setSelectedRunner] = useState(() => localStorage.getItem('omnifleet-runner') ?? fallbackRunners[0].id)
+  const [selectedProject, setSelectedProject] = useState(() => localStorage.getItem('omnifleet-project') ?? fallbackProjects[0].id)
+  const [selectedTool, setSelectedTool] = useState(() => localStorage.getItem('omnifleet-tool') ?? 'mock-agent')
   const [taskPriority, setTaskPriority] = useState('normal')
   const [batchMode, setBatchMode] = useState(false)
   const [requiredCaps, setRequiredCaps] = useState('')
@@ -142,8 +142,8 @@ export function App() {
   const [relayUrl, setRelayUrl] = useState(() => localStorage.getItem('omnifleet-relay-url') ?? defaultRelayUrl)
   const [relayToken, setRelayToken] = useState(() => localStorage.getItem('omnifleet-relay-token') ?? '')
   const [relayStatus, setRelayStatus] = useState<string | null>(null)
-  const [useRelayProxy, setUseRelayProxy] = useState(false)
-  const [autoRoute, setAutoRoute] = useState(false)
+  const [useRelayProxy, setUseRelayProxy] = useState(() => localStorage.getItem('omnifleet-proxy') === 'true')
+  const [autoRoute, setAutoRoute] = useState(() => localStorage.getItem('omnifleet-autoroute') === 'true')
   const [routePreview, setRoutePreview] = useState<string | null>(null)
   const [newProjectName, setNewProjectName] = useState('')
   const [newProjectPath, setNewProjectPath] = useState('')
@@ -152,6 +152,14 @@ export function App() {
   const [projectStatus, setProjectStatus] = useState<string | null>(null)
   const [worktrees, setWorktrees] = useState<{ taskId: string; path: string; taskStatus: string }[]>([])
   const [worktreeStatus, setWorktreeStatus] = useState<string | null>(null)
+
+  useEffect(() => {
+    localStorage.setItem('omnifleet-runner', selectedRunner)
+    localStorage.setItem('omnifleet-project', selectedProject)
+    localStorage.setItem('omnifleet-tool', selectedTool)
+    localStorage.setItem('omnifleet-proxy', String(useRelayProxy))
+    localStorage.setItem('omnifleet-autoroute', String(autoRoute))
+  }, [selectedRunner, selectedProject, selectedTool, useRelayProxy, autoRoute])
 
   useEffect(() => {
     async function loadRunner() {
