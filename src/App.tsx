@@ -118,7 +118,8 @@ export function App() {
   const [autoRoute, setAutoRoute] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const [newProjectPath, setNewProjectPath] = useState('')
-  const [newProjectCommand, setNewProjectCommand] = useState('npm run build')
+  const [newProjectCommands, setNewProjectCommands] = useState('npm run build')
+  const [newProjectDefaultCommand, setNewProjectDefaultCommand] = useState('npm run build')
   const [projectStatus, setProjectStatus] = useState<string | null>(null)
 
   useEffect(() => {
@@ -184,6 +185,10 @@ export function App() {
   function saveRelayToken() {
     localStorage.setItem('omnifleet-relay-token', relayToken)
     setRelayStatus(null)
+  }
+
+  function parseCommandList(value: string) {
+    return value.split(',').map((command) => command.trim()).filter(Boolean)
   }
 
   async function loadProjectsForRunner(runner: Runner) {
@@ -253,6 +258,7 @@ export function App() {
   async function registerProject() {
     try {
       const endpoint = currentRunner.endpoint ?? apiBase
+      const allowedCommands = parseCommandList(newProjectCommands)
       const response = await fetch(`${endpoint}/api/projects`, {
         method: 'POST',
         headers: {
@@ -262,8 +268,8 @@ export function App() {
         body: JSON.stringify({
           name: newProjectName,
           path: newProjectPath,
-          allowedCommands: [newProjectCommand],
-          defaultCommand: newProjectCommand,
+          allowedCommands,
+          defaultCommand: newProjectDefaultCommand || allowedCommands[0],
         }),
       })
       if (!response.ok) {
@@ -274,7 +280,8 @@ export function App() {
       setProjectStatus(`registered ${project.name}`)
       setNewProjectName('')
       setNewProjectPath('')
-      setNewProjectCommand('npm run build')
+      setNewProjectCommands('npm run build')
+      setNewProjectDefaultCommand('npm run build')
       await loadProjectsForRunner(currentRunner)
       if (useRelayProxy) await loadRelayRunners()
     } catch (error) {
@@ -306,7 +313,8 @@ export function App() {
       const endpoint = currentRunner.endpoint ?? apiBase
       const name = newProjectName || currentProject.name
       const path = newProjectPath || currentProject.absolutePath
-      const command = newProjectCommand || currentProject.defaultCommand
+      const allowedCommands = parseCommandList(newProjectCommands || currentProject.allowedCommands.join(', '))
+      const command = newProjectDefaultCommand || currentProject.defaultCommand || allowedCommands[0]
       const response = await fetch(`${endpoint}/api/projects/${selectedProject}`, {
         method: 'PATCH',
         headers: {
@@ -316,7 +324,7 @@ export function App() {
         body: JSON.stringify({
           name,
           path,
-          allowedCommands: [command],
+          allowedCommands,
           defaultCommand: command,
         }),
       })
@@ -723,9 +731,14 @@ export function App() {
               onChange={(event) => setNewProjectPath(event.target.value)}
             />
             <input
-              value={newProjectCommand}
+              value={newProjectCommands}
+              placeholder="Allowed commands, comma separated"
+              onChange={(event) => setNewProjectCommands(event.target.value)}
+            />
+            <input
+              value={newProjectDefaultCommand}
               placeholder="Default command"
-              onChange={(event) => setNewProjectCommand(event.target.value)}
+              onChange={(event) => setNewProjectDefaultCommand(event.target.value)}
             />
             <button className="secondary compact" onClick={registerProject} disabled={!newProjectName || !newProjectPath}>
               Register project

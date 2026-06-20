@@ -807,7 +807,7 @@ Additional projects can be registered on a runner with `POST /api/projects`. Reg
 .omnifleet/projects.json
 ```
 
-The web UI includes a small project registration form. A project registration requires a name, path, allowed command list, and default command. The runner validates that the path exists and that the default command is included in the allowed command list.
+The web UI includes a small project registration form. A project registration requires a name, path, allowed command list, and default command. Allowed commands are entered as a comma-separated list. The runner validates that the path exists and that the default command is included in the allowed command list.
 
 Dynamic projects can be updated with `PATCH /api/projects/:projectId` and removed with `DELETE /api/projects/:projectId`. Built-in projects from `omnifleet.config.json` cannot be updated or removed through the API.
 
