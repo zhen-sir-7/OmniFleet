@@ -730,6 +730,14 @@ select {
   margin-bottom: 14px;
 }
 
+.history-refreshed {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
 .history-summary {
   display: grid;
   grid-template-columns: repeat(8, 1fr);

@@ -124,6 +124,7 @@ export function App() {
   const [logStatus, setLogStatus] = useState<string | null>(null)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [history, setHistory] = useState<TaskRecord[]>([])
+  const [lastHistoryRefresh, setLastHistoryRefresh] = useState<string | null>(null)
   const [historyQuery, setHistoryQuery] = useState('')
   const [historyStatus, setHistoryStatus] = useState<TaskState | 'all'>('all')
   const [token, setToken] = useState(() => localStorage.getItem('omnifleet-token') ?? '')
@@ -445,6 +446,7 @@ export function App() {
       const response = await apiFetch('/api/tasks')
       if (!response.ok) return
       setHistory((await response.json()) as TaskRecord[])
+      setLastHistoryRefresh(new Date().toLocaleTimeString())
     } catch {
       setHistory([])
     }
@@ -1191,6 +1193,7 @@ export function App() {
             Refresh
           </button>
         </div>
+        {lastHistoryRefresh && <p className="history-refreshed">Last refresh: {lastHistoryRefresh}</p>}
 
         {history.length > 0 && (
           <>
