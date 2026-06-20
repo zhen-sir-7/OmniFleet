@@ -444,6 +444,18 @@ const server = createServer(async (req, res) => {
       return
     }
 
+    if (url.pathname === '/api/tasks/batch' && req.method === 'POST') {
+      const body = await readBody(req)
+      const runnerId = body.runnerId ?? body.tasks?.[0]?.runnerId ?? ''
+      const runner = findRunner(runnerId)
+      if (!runner) return json(res, 404, { error: 'Runner not found for batch' })
+      const proxied = await proxyJson(req, res, runner, '/api/tasks/batch', { method: 'POST', body })
+      if (proxied.ok && Array.isArray(proxied.data)) {
+        for (const task of proxied.data) rememberTask(runner, task)
+      }
+      return
+    }
+
     if (url.pathname === '/api/tasks/route' && req.method === 'POST') {
       const body = await readBody(req)
       const routed = routeRunner(body)

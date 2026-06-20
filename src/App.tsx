@@ -110,6 +110,7 @@ export function App() {
   const [selectedProject, setSelectedProject] = useState(fallbackProjects[0].id)
   const [selectedTool, setSelectedTool] = useState('mock-agent')
   const [taskPriority, setTaskPriority] = useState('normal')
+  const [batchMode, setBatchMode] = useState(false)
   const [state, setState] = useState<TaskState>('draft')
   const [events, setEvents] = useState<TaskEvent[]>([])
   const [result, setResult] = useState<TaskResult | null>(null)
@@ -446,16 +447,26 @@ export function App() {
       return
     }
 
-    const response = await apiFetch(useRelayProxy && autoRoute ? '/api/tasks/route' : '/api/tasks', {
+    const response = await apiFetch(useRelayProxy && autoRoute ? '/api/tasks/route' : batchMode ? '/api/tasks/batch' : '/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        description: task,
-        runnerId: selectedRunner,
-        projectId: selectedProject,
-        tool: selectedTool,
-        priority: taskPriority,
-      }),
+      body: JSON.stringify(batchMode
+        ? {
+            tasks: task.split(/\r?\n/).filter(Boolean).map((line) => ({
+              description: line.trim(),
+              runnerId: selectedRunner,
+              projectId: selectedProject,
+              tool: selectedTool,
+              priority: taskPriority,
+            })),
+          }
+        : {
+            description: task,
+            runnerId: selectedRunner,
+            projectId: selectedProject,
+            tool: selectedTool,
+            priority: taskPriority,
+          }),
     })
 
     if (!response.ok) {
@@ -473,6 +484,14 @@ export function App() {
     }
 
     const created = (await response.json()) as { id: string; runnerId?: string }
+    if (batchMode) {
+      const items = Array.isArray(created) ? created : [created]
+      setState('draft')
+      setResult({ ok: true, durationMs: 0, summary: `${items.length} task(s) queued` })
+      setEvents([{ type: 'log', level: 'info', message: `batch dispatched: ${items.length} task(s)` }])
+      loadHistory()
+      return
+    }
     const eventRunnerId = created.runnerId ?? selectedRunner
     if (created.runnerId) setSelectedRunner(created.runnerId)
     setTaskId(created.id)
@@ -760,6 +779,15 @@ export function App() {
           <label className="proxy-toggle">
             <input
               type="checkbox"
+              checked={batchMode}
+              onChange={(event) => setBatchMode(event.target.checked)}
+            />
+            <span>Batch mode: one task per line</span>
+          </label>
+
+          <label className="proxy-toggle">
+            <input
+              type="checkbox"
               checked={autoRoute}
               disabled={!useRelayProxy}
               onChange={(event) => setAutoRoute(event.target.checked)}
@@ -916,7 +944,7 @@ export function App() {
 
           <div className="actions">
             <button className="primary" onClick={startTask} disabled={state === 'running' || state === 'queued'}>
-              {state === 'draft' ? 'Dispatch task' : 'Run again'}
+              {state === 'draft' ? (batchMode ? 'Dispatch batch' : 'Dispatch task') : 'Run again'}
             </button>
             <button className="secondary" onClick={resetTask} disabled={state === 'running' || state === 'queued'}>
               Reset

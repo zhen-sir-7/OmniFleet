@@ -722,6 +722,14 @@ const server = createServer(async (req, res) => {
       return json(res, 201, publicTask(task))
     }
 
+    if (url.pathname === '/api/tasks/batch' && req.method === 'POST') {
+      const body = await readBody(req)
+      const items = Array.isArray(body.tasks) ? body.tasks : []
+      if (items.length === 0) return json(res, 400, { error: 'Provide a tasks array with at least one item.' })
+      const created = items.map((item) => createTask(item))
+      return json(res, 201, created.map(publicTask))
+    }
+
     if (url.pathname === '/api/tasks' && req.method === 'GET') {
       const items = Array.from(tasks.values())
         .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
