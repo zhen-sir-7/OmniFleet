@@ -11,6 +11,8 @@ type Runner = {
   tools: string[]
   projects: string[]
   capabilities?: string[]
+  queueLength?: number
+  runningCount?: number
 }
 
 type Project = {
@@ -1455,6 +1457,11 @@ export function App() {
                   tasks: {fleetTaskCounts[runner.id]?.total ?? 0}
                   {fleetTaskCounts[runner.id]?.active ? ` (${fleetTaskCounts[runner.id].active} active)` : ''}
                 </p>
+                {'queueLength' in runner && (
+                  <p className="fleet-caps">
+                    queue: {runner.queueLength} · running: {runner.runningCount}
+                  </p>
+                )}
               </button>
             ))}
           </div>
