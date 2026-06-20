@@ -11,6 +11,7 @@ const port = Number(process.env.OMNIFLEET_PORT ?? 8787)
 const stateDir = resolve(root, '.omnifleet')
 const taskStorePath = resolve(stateDir, 'tasks.json')
 const deviceStorePath = resolve(stateDir, 'device.json')
+const projectStorePath = resolve(stateDir, 'projects.json')
 const tasks = loadTasks()
 const subscribers = new Map()
 const runningProcesses = new Map()
@@ -30,6 +31,21 @@ function saveTasks() {
   mkdirSync(stateDir, { recursive: true })
   const items = Array.from(tasks.values()).slice(-100)
   writeFileSync(taskStorePath, JSON.stringify(items, null, 2), 'utf8')
+}
+
+function loadRegisteredProjects() {
+  try {
+    if (!existsSync(projectStorePath)) return []
+    const projects = JSON.parse(readFileSync(projectStorePath, 'utf8'))
+    return Array.isArray(projects) ? projects : []
+  } catch {
+    return []
+  }
+}
+
+function saveRegisteredProjects(projects) {
+  mkdirSync(stateDir, { recursive: true })
+  writeFileSync(projectStorePath, JSON.stringify(projects, null, 2), 'utf8')
 }
 
 function loadDevice() {
@@ -208,10 +224,40 @@ function publicTask(task) {
 }
 
 function normalizeProjects() {
-  return config.projects.map((project) => ({
+  const registered = loadRegisteredProjects()
+  const merged = [...config.projects, ...registered]
+  const seen = new Set()
+  return merged.filter((project) => {
+    if (seen.has(project.id)) return false
+    seen.add(project.id)
+    return true
+  }).map((project) => ({
     ...project,
     absolutePath: resolve(root, project.path),
   }))
+}
+
+function projectIdFromName(name) {
+  return String(name).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
+function registerProject(body) {
+  const name = String(body.name ?? '').trim()
+  const rawPath = String(body.path ?? '').trim()
+  const id = String(body.id ?? projectIdFromName(name)).trim()
+  const allowedCommands = Array.isArray(body.allowedCommands) && body.allowedCommands.length > 0 ? body.allowedCommands.map(String) : ['npm run build']
+  const defaultCommand = String(body.defaultCommand ?? allowedCommands[0])
+
+  if (!id || !name || !rawPath) return { ok: false, status: 400, error: 'id, name, and path are required.' }
+  const absolutePath = resolve(root, rawPath)
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isDirectory()) return { ok: false, status: 400, error: 'Project path must exist and be a directory.' }
+  if (!allowedCommands.includes(defaultCommand)) return { ok: false, status: 400, error: 'defaultCommand must be included in allowedCommands.' }
+
+  const registered = loadRegisteredProjects().filter((project) => project.id !== id)
+  const project = { id, name, path: rawPath, allowedCommands, defaultCommand }
+  registered.push(project)
+  saveRegisteredProjects(registered)
+  return { ok: true, status: 201, project: { ...project, absolutePath } }
 }
 
 function streamLines(taskId, level, chunk) {
@@ -419,7 +465,7 @@ async function runnerPayload() {
     deviceId: device.id,
     tools: await availableTools(),
     status: 'online',
-    projects: config.projects.map((project) => project.name),
+    projects: normalizeProjects().map((project) => project.name),
   }
 }
 
@@ -543,7 +589,12 @@ const server = createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/') && !isAuthorized(req, url)) return unauthorized(res)
 
     if (url.pathname === '/api/runners') return json(res, 200, [await runnerPayload()])
-    if (url.pathname === '/api/projects') return json(res, 200, normalizeProjects())
+    if (url.pathname === '/api/projects' && req.method === 'GET') return json(res, 200, normalizeProjects())
+
+    if (url.pathname === '/api/projects' && req.method === 'POST') {
+      const registered = registerProject(await readBody(req))
+      return json(res, registered.status, registered.ok ? registered.project : { error: registered.error })
+    }
 
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
       const body = await readBody(req)

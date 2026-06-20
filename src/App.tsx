@@ -116,6 +116,10 @@ export function App() {
   const [relayStatus, setRelayStatus] = useState<string | null>(null)
   const [useRelayProxy, setUseRelayProxy] = useState(false)
   const [autoRoute, setAutoRoute] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [newProjectPath, setNewProjectPath] = useState('')
+  const [newProjectCommand, setNewProjectCommand] = useState('npm run build')
+  const [projectStatus, setProjectStatus] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadRunner() {
@@ -243,6 +247,38 @@ export function App() {
       loadRelayRunners()
     } catch (error) {
       setRelayStatus(error instanceof Error ? error.message : 'failed to unregister runner')
+    }
+  }
+
+  async function registerProject() {
+    try {
+      const endpoint = currentRunner.endpoint ?? apiBase
+      const response = await fetch(`${endpoint}/api/projects`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'X-OmniFleet-Token': token } : {}),
+        },
+        body: JSON.stringify({
+          name: newProjectName,
+          path: newProjectPath,
+          allowedCommands: [newProjectCommand],
+          defaultCommand: newProjectCommand,
+        }),
+      })
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string }
+        throw new Error(payload.error ?? 'failed to register project')
+      }
+      const project = (await response.json()) as Project
+      setProjectStatus(`registered ${project.name}`)
+      setNewProjectName('')
+      setNewProjectPath('')
+      setNewProjectCommand('npm run build')
+      await loadProjectsForRunner(currentRunner)
+      if (useRelayProxy) await loadRelayRunners()
+    } catch (error) {
+      setProjectStatus(error instanceof Error ? error.message : 'failed to register project')
     }
   }
 
@@ -621,6 +657,29 @@ export function App() {
                 Unregister runner
               </button>
             )}
+          </div>
+
+          <div className="project-register">
+            <p className="field-label">Register project on runner</p>
+            <input
+              value={newProjectName}
+              placeholder="Project name"
+              onChange={(event) => setNewProjectName(event.target.value)}
+            />
+            <input
+              value={newProjectPath}
+              placeholder="Relative or absolute path"
+              onChange={(event) => setNewProjectPath(event.target.value)}
+            />
+            <input
+              value={newProjectCommand}
+              placeholder="Default command"
+              onChange={(event) => setNewProjectCommand(event.target.value)}
+            />
+            <button className="secondary compact" onClick={registerProject} disabled={!newProjectName || !newProjectPath}>
+              Register project
+            </button>
+            {projectStatus && <p className="token-hint neutral-hint">{projectStatus}</p>}
           </div>
 
           <div className="actions">

@@ -611,6 +611,7 @@ The runner exposes:
 GET  /api/health
 GET  /api/runners
 GET  /api/projects
+POST /api/projects
 GET  /api/tasks
 POST /api/tasks
 GET  /api/tasks/:id
@@ -797,5 +798,13 @@ Task history is stored locally at:
 ```
 
 The runner keeps the latest 100 tasks, including task metadata, events, status, and result summaries. The web UI reads the latest 50 tasks from `GET /api/tasks` and displays them in the task history panel. This is intentionally local-only and ignored by git.
+
+Additional projects can be registered on a runner with `POST /api/projects`. Registered projects are stored locally at:
+
+```text
+.omnifleet/projects.json
+```
+
+The web UI includes a small project registration form. A project registration requires a name, path, allowed command list, and default command. The runner validates that the path exists and that the default command is included in the allowed command list.
 
 This gives OmniFleet a real but safe first landing point: the user can dispatch a task to a local runner and observe an actual project command execute with streamed logs.
