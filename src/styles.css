@@ -626,6 +626,13 @@ select {
   color: var(--muted);
 }
 
+.history-filters {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
 .history-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -720,6 +727,7 @@ select {
   .review-actions,
   .policy-grid,
   .history-grid,
+  .history-filters,
   .task-meta {
     grid-template-columns: 1fr;
   }

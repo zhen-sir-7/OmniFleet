@@ -114,6 +114,8 @@ export function App() {
   const [runnerOnline, setRunnerOnline] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
   const [history, setHistory] = useState<TaskRecord[]>([])
+  const [historyQuery, setHistoryQuery] = useState('')
+  const [historyStatus, setHistoryStatus] = useState<TaskState | 'all'>('all')
   const [token, setToken] = useState(() => localStorage.getItem('omnifleet-token') ?? '')
   const [authError, setAuthError] = useState<string | null>(null)
   const [relayUrl, setRelayUrl] = useState(() => localStorage.getItem('omnifleet-relay-url') ?? defaultRelayUrl)
@@ -161,6 +163,14 @@ export function App() {
   const relayBase = relayUrl.replace(/\/$/, '')
   const logEvents = events.filter((event) => event.type === 'log')
   const diffLines = result?.diff ?? []
+  const filteredHistory = history.filter((item) => {
+    const query = historyQuery.trim().toLowerCase()
+    const matchesQuery = !query || [item.id, item.description, item.tool, item.runnerName, item.runnerId]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(query))
+    const matchesStatus = historyStatus === 'all' || item.status === historyStatus
+    return matchesQuery && matchesStatus
+  })
 
   function taskPath(path: 'events' | 'approve' | 'apply' | 'cancel' | 'retry', id: string, runnerId = selectedRunner) {
     if (useRelayProxy) return `/api/tasks/${runnerId}/${id}/${path}`
@@ -941,11 +951,33 @@ export function App() {
           </button>
         </div>
 
+        {history.length > 0 && (
+          <div className="history-filters">
+            <input
+              value={historyQuery}
+              placeholder="Filter by task, runner, tool, description"
+              onChange={(event) => setHistoryQuery(event.target.value)}
+            />
+            <select value={historyStatus} onChange={(event) => setHistoryStatus(event.target.value as TaskState | 'all')}>
+              <option value="all">All statuses</option>
+              <option value="queued">Queued</option>
+              <option value="running">Running</option>
+              <option value="review">Review</option>
+              <option value="approved">Approved</option>
+              <option value="applied">Applied</option>
+              <option value="failed">Failed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+        )}
+
         {history.length === 0 ? (
           <p className="history-empty">No persisted tasks yet. Start the local runner and dispatch a task.</p>
+        ) : filteredHistory.length === 0 ? (
+          <p className="history-empty">No tasks match the current filters.</p>
         ) : (
           <div className="history-grid">
-            {history.map((item) => (
+            {filteredHistory.map((item) => (
               <button
                 className="history-item"
                 key={item.id}
